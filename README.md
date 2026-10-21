@@ -1,88 +1,93 @@
 # Debug-CMD
 
-Arrasta um `.cmd` ou `.bat` para cima do `Debug-CMD.cmd` e obtém um `.log` com tudo o que o script fez, mais um resumo do que correu bem e do que falhou.
+English | [Português](README.pt-PT.md)
 
-Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 10/11.
+Drag a `.cmd` or `.bat` file onto `Debug-CMD.cmd` and get a `.log` of everything the script did, plus a summary of what worked and what failed.
 
-## Funcionalidades
+A single file, nothing to install: it uses the PowerShell that already ships with Windows 10/11.
 
-- **Debug linha a linha:** executa uma cópia temporária do script com `echo on`, por isso o log mostra cada comando antes da respetiva saída.
-- **Log com hora:** cada linha tem hora com milissegundos. O topo do log traz o utilizador, a versão do Windows e se correu como administrador.
-- **Resumo no topo do log e no ecrã:**
-  - estado final: `OK`, `COM PROBLEMAS` ou `INTERROMPIDO`;
-  - código de saída e duração;
-  - **O QUE FALHOU:** comandos com erro e as linhas de erro respetivas;
-  - **O QUE CORREU BEM:** comandos sem erros detetados.
-- **Sem intervenção:** os `pause` da cópia são ignorados, para o script correr até ao fim.
-- **Robusto:** com Ctrl+C o log e o resumo ficam guardados, o processo é fechado e a cópia temporária é apagada.
-- **Não parece bloqueado:** em comandos demorados e silenciosos aparece "a correr há mm:ss" a cada 10 segundos.
-- **Original intocado:** o script que arrastas nunca é alterado.
+## Features
 
-## Utilização
+- **Line-by-line debugging:** runs a temporary copy of your script with `echo on`, so the log shows each command right before its output.
+- **Timestamped log:** every line carries a time with milliseconds. The top of the log lists the user, the Windows version, and whether it ran as administrator.
+- **Summary at the top of the log and on screen:**
+  - final status: `OK`, `WITH PROBLEMS`, or `INTERRUPTED`;
+  - exit code and duration;
+  - **WHAT FAILED:** commands with errors, along with the error lines;
+  - **WHAT WORKED:** commands with no detected errors.
+- **Hands-off:** `pause` commands in the copy are skipped so the script runs to the end.
+- **Robust:** on Ctrl+C the log and summary are still saved, the process is stopped, and the temporary copy is deleted.
+- **Doesn't look frozen:** during long, silent commands it prints "running for mm:ss" every 10 seconds.
+- **Original untouched:** the script you drag in is never modified.
 
-1. Descarrega o `Debug-CMD.cmd`.
-2. Arrasta o teu `.cmd` ou `.bat` para cima dele.
-3. No fim, a janela fica aberta e o log abre no Bloco de Notas.
+## Usage
 
-O log é criado ao lado do script, com o nome `NomeDoScript_debug_AAAA-MM-DD_HH-MM-SS.log`. Se a pasta não permitir escrita, vai para a pasta temporária.
+1. Download `Debug-CMD.cmd`.
+2. Drag your `.cmd` or `.bat` file onto it.
+3. When it finishes, the window stays open and the log opens in Notepad.
 
-## Opções
+The log is created next to your script and named `ScriptName_debug_YYYY-MM-DD_HH-MM-SS.log`. If that folder isn't writable, it goes to the temp folder instead.
 
-Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não):
+## Options
 
-| Opção | Por defeito | O que faz |
+These are at the top of `Debug-CMD.cmd` (`1` = yes, `0` = no):
+
+| Option | Default | What it does |
 |---|---|---|
-| `ELEVAR` | `0` | Pede permissões de administrador (aparece o UAC uma vez) |
-| `ECHO_ON` | `1` | Força `echo on` na cópia temporária |
-| `IGNORAR_PAUSE` | `1` | Troca os `pause` da cópia por uma nota |
-| `ABRIR_LOG` | `1` | Abre o log no Bloco de Notas no fim |
+| `ELEVAR` | `0` | Requests administrator rights (one UAC prompt) |
+| `ECHO_ON` | `1` | Forces `echo on` in the temporary copy |
+| `IGNORAR_PAUSE` | `1` | Replaces `pause` in the copy with a note |
+| `ABRIR_LOG` | `1` | Opens the log in Notepad when done |
 
-## Exemplo de resumo
+## Example summary
 
 ```
 ==============================================================================
- RESUMO
+ SUMMARY
 ==============================================================================
-Script           : C:\Scripts\exemplo.cmd
-Estado           : COM PROBLEMAS
-Código de saída  : 1   (diferente de 0: o último comando terminou com erro)
-Duração          : 00:00:03.412
-Comandos         : 6 executados | 5 sem erros detetados | 1 com problemas
-Linhas de erro   : 1
+Script           : C:\Scripts\example.cmd
+Status           : WITH PROBLEMS
+Exit code        : 1
+Duration         : 00:00:03.412
+Commands         : 6 run | 5 with no detected errors | 1 with problems
+Error lines      : 1
 
 ==============================================================================
- O QUE FALHOU
+ WHAT FAILED
 ==============================================================================
-[FALHOU] [23:10:16.531] copy origem.txt destino\
-           > O sistema não consegue localizar o ficheiro especificado.
+[FAILED] [23:10:16.531] copy source.txt dest\
+           > The system cannot find the file specified.
 ```
 
-## Como funciona
+The labels in the actual log are currently in Portuguese (`RESUMO`, `O QUE FALHOU`, `O QUE CORREU BEM`).
 
-1. O `.cmd` extrai o PowerShell que traz embutido para um `.ps1` temporário e executa-o.
-2. O PowerShell cria uma cópia do script alvo (`__dbg_<nome>`) com `echo off` → `echo on` e `pause` ignorado. A cópia preserva os bytes do original.
-3. Corre a cópia com `cmd /c`, junta `stdout` e `stderr` pela ordem em que aparecem e regista cada linha com hora.
-4. No fim, o log é analisado: as linhas que correspondem a padrões de erro (português e inglês) são associadas ao comando que as produziu.
+## How it works
 
-## Limitações
+1. The `.cmd` extracts the PowerShell code embedded in it into a temporary `.ps1` file and runs it.
+2. PowerShell makes a copy of the target script (`__dbg_<name>`) with `echo off` changed to `echo on` and `pause` skipped. The copy preserves the original bytes.
+3. It runs the copy with `cmd /c`, merges `stdout` and `stderr` in the order they appear, and logs each line with a timestamp.
+4. At the end, the log is analyzed: lines matching error patterns (Portuguese and English) are attached to the command that produced them.
 
-- Um `cmd` não deixa ver o que se passa por dentro, por isso a deteção de erros é feita por **palavras-chave** na saída (por exemplo "não é reconhecido", "acesso negado", "failed"). Pode falhar erros em outros idiomas e pode dar falsos positivos, por exemplo num `echo` que escreva "erro".
-- Não há código de erro por comando, só o do fim.
-- Comandos com `>nul 2>&1` escondem os próprios erros.
-- Só o script arrastado é forçado a `echo on`. Os scripts que ele chama com `call` mantêm o `echo off` deles.
-- `%0`, `%~nx0` e semelhantes apontam para a cópia `__dbg_...`.
-- Os `pause` ignorados e a cópia mudam ligeiramente o comportamento do script. Desativa com `IGNORAR_PAUSE=0` e `ECHO_ON=0` se isso for um problema.
-- Se carregares Ctrl+C e aparecer "Terminate batch job (Y/N)?", responde `N` para ver o resumo.
-- Não use o Ctrl+C para copiar texto da janela: nesta consola interrompe a execução.
+## Limitations
 
-## Requisitos
+- `cmd` doesn't let you see inside a script, so errors are detected by **keywords** in the output (for example "is not recognized", "access is denied", "failed"). It can miss errors in other languages and can produce false positives, such as an `echo` that prints "error".
+- There is no per-command exit code, only the final one.
+- Commands using `>nul 2>&1` hide their own errors.
+- Only the dragged script is forced to `echo on`. Scripts it launches with `call` keep their own `echo off`.
+- `%0`, `%~nx0`, and similar point to the `__dbg_...` copy.
+- Skipping `pause` and using a copy slightly changes the script's behavior. Set `IGNORAR_PAUSE=0` and `ECHO_ON=0` if that matters.
+- If you press Ctrl+C and see "Terminate batch job (Y/N)?", answer `N` to see the summary.
+- Don't use Ctrl+C to copy text from the window: in this console it interrupts the run.
+- The summary and log labels are in Portuguese for now.
 
-- Windows 10 ou 11 com o Windows PowerShell 5.1 (já incluído).
+## Requirements
 
-## Aviso
+- Windows 10 or 11 with Windows PowerShell 5.1 (included).
 
-O script alvo é **executado a sério**. Se apaga ficheiros, instala programas ou muda definições, fará o mesmo durante o debug. Testa primeiro com cuidado.
+## Warning
 
-## Licença
+Your script is **actually executed**. If it deletes files, installs software, or changes settings, it will do the same during debugging. Test carefully.
+
+## License
 
 [MIT](LICENSE)
