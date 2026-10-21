@@ -8,6 +8,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 
 ## Features
 
+- **Safe test mode:** choose `T` at the start to only analyze the script. Nothing is executed. It flags dangerous commands (delete, format, registry, shutdown, downloads...) and broken `goto`/`call` targets.
 - **Line-by-line debugging:** runs a temporary copy of your script with `echo on`, so the log shows each command right before its output.
 - **Timestamped log:** every line carries a time with milliseconds. The top of the log lists the user, the Windows version, and whether it ran as administrator.
 - **Summary at the top of the log and on screen:**
@@ -28,6 +29,15 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 
 The log is created next to your script and named `ScriptName_debug_YYYY-MM-DD_HH-MM-SS.log`. If that folder isn't writable, it goes to the temp folder instead.
 
+## Modes
+
+When you drag a script in, you are asked to choose:
+
+- **`E` - Execute:** runs the script for real and debugs it (log + summary).
+- **`T` - Test only:** static analysis. The script is only read, **never executed**. You get a `Name_test_<date>.log` report with the risk verdict, the lines that can change the system (grouped as HIGH / MEDIUM / LOW), and structural problems such as a `goto` to a label that doesn't exist or a `call` to a missing file.
+
+Set `MODO` to `RUN` or `TEST` to skip the question.
+
 ## Options
 
 These are at the top of `Debug-CMD.cmd` (`1` = yes, `0` = no):
@@ -38,6 +48,7 @@ These are at the top of `Debug-CMD.cmd` (`1` = yes, `0` = no):
 | `ECHO_ON` | `1` | Forces `echo on` in the temporary copy |
 | `IGNORAR_PAUSE` | `1` | Replaces `pause` in the copy with a note |
 | `ABRIR_LOG` | `1` | Opens the log in Notepad when done |
+| `MODO` | `ASK` | `ASK` asks every time, `RUN` always executes, `TEST` only analyzes (executes nothing) |
 
 ## Example summary
 
@@ -70,6 +81,7 @@ The labels in the actual log are currently in Portuguese (`RESUMO`, `O QUE FALHO
 
 ## Limitations
 
+- Test mode is a keyword scan of the script text: it does not expand variables, does not follow scripts it calls, and can't see commands built at run time. It lowers the risk, it doesn't guarantee safety.
 - `cmd` doesn't let you see inside a script, so errors are detected by **keywords** in the output (for example "is not recognized", "access is denied", "failed"). It can miss errors in other languages and can produce false positives, such as an `echo` that prints "error".
 - There is no per-command exit code, only the final one.
 - Commands using `>nul 2>&1` hide their own errors.

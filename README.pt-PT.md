@@ -8,6 +8,7 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 
 ## Funcionalidades
 
+- **Modo de teste seguro:** escolhe `T` no início para só analisar o script. Nada é executado. Assinala comandos perigosos (apagar, formatar, registo, desligar, downloads...) e destinos de `goto`/`call` inexistentes.
 - **Debug linha a linha:** executa uma cópia temporária do script com `echo on`, por isso o log mostra cada comando antes da respetiva saída.
 - **Log com hora:** cada linha tem hora com milissegundos. O topo do log traz o utilizador, a versão do Windows e se correu como administrador.
 - **Resumo no topo do log e no ecrã:**
@@ -28,6 +29,15 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 
 O log é criado ao lado do script, com o nome `NomeDoScript_debug_AAAA-MM-DD_HH-MM-SS.log`. Se a pasta não permitir escrita, vai para a pasta temporária.
 
+## Modos
+
+Ao arrastar um script, és perguntado:
+
+- **`E` - Executar:** corre o script a sério e faz o debug (log + resumo).
+- **`T` - Só testar:** análise estática. O script só é lido, **nunca é executado**. Obténs um relatório `Nome_test_<data>.log` com o veredito de risco, as linhas que podem alterar o sistema (ALTO / MÉDIO / BAIXO) e problemas estruturais, como um `goto` para uma etiqueta que não existe ou um `call` para um ficheiro em falta.
+
+Põe `MODO` a `RUN` ou `TEST` para não perguntar.
+
 ## Opções
 
 Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não):
@@ -38,6 +48,7 @@ Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não):
 | `ECHO_ON` | `1` | Força `echo on` na cópia temporária |
 | `IGNORAR_PAUSE` | `1` | Troca os `pause` da cópia por uma nota |
 | `ABRIR_LOG` | `1` | Abre o log no Bloco de Notas no fim |
+| `MODO` | `ASK` | `ASK` pergunta sempre, `RUN` executa sempre, `TEST` só analisa (não executa nada) |
 
 ## Exemplo de resumo
 
@@ -68,6 +79,7 @@ Linhas de erro   : 1
 
 ## Limitações
 
+- O modo de teste é uma análise por palavras-chave ao texto do script: não expande variáveis, não segue os scripts que ele chama e não vê comandos construídos em tempo de execução. Reduz o risco, não garante segurança.
 - Um `cmd` não deixa ver o que se passa por dentro, por isso a deteção de erros é feita por **palavras-chave** na saída (por exemplo "não é reconhecido", "acesso negado", "failed"). Pode falhar erros em outros idiomas e pode dar falsos positivos, por exemplo num `echo` que escreva "erro".
 - Não há código de erro por comando, só o do fim.
 - Comandos com `>nul 2>&1` escondem os próprios erros.
