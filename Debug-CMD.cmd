@@ -3,96 +3,96 @@ setlocal EnableExtensions
 title Debug-CMD
 rem ======================================================================
 rem  Debug-CMD.cmd
-rem  Arrasta um ficheiro .cmd ou .bat para cima deste ficheiro.
-rem  Ele executa o script com echo on, regista tudo num .log (ao lado do
-rem  script) e gera um resumo do que correu bem e do que falhou.
-rem  Nao precisa de instalar nada: usa o PowerShell que ja vem no Windows.
-rem  A janela fica sempre aberta no fim (pause) para leres o resultado.
+rem  Drag a .cmd or .bat file onto this file.
+rem  It runs the script with echo on, records everything in a .log (next to the
+rem  script) and builds a summary of what worked and what failed.
+rem  Nothing to install: it uses the PowerShell that already ships with Windows.
+rem  The window always stays open at the end (pause) so you can read the result.
 rem ======================================================================
 
-rem ---- Opcoes (1 = sim, 0 = nao) ----
-rem ELEVAR        pede permissoes de administrador (aparece o UAC uma vez)
-rem ECHO_ON       forca echo on numa copia temporaria do script
-rem IGNORAR_PAUSE troca os pause da copia por uma nota, para correr sem intervencao
-rem ABRIR_LOG     abre o relatorio no fim (HTML no browser, ou o .log no Bloco de Notas)
-rem GERAR_HTML    cria tambem um relatorio .html facil de ler (ao lado do .log)
-rem MODO          ASK = pergunta de cada vez, RUN = executa, TEST = so analisa sem executar NADA
-set "ELEVAR=0"
+rem ---- Options (1 = yes, 0 = no) ----
+rem ELEVATE         asks for administrator rights (one UAC prompt)
+rem ECHO_ON         forces echo on in a temporary copy of the script
+rem SKIP_PAUSE      replaces pause in the copy with a note, so it runs hands-off
+rem OPEN_REPORT     opens the report when done (HTML in the browser, or the .log in Notepad)
+rem GENERATE_HTML   also creates an easy-to-read .html report (next to the .log)
+rem MODE            ASK = ask every time, RUN = execute, TEST = only analyze, execute NOTHING
+set "ELEVATE=0"
 set "ECHO_ON=1"
-set "IGNORAR_PAUSE=1"
-set "ABRIR_LOG=1"
-set "GERAR_HTML=1"
-set "MODO=ASK"
+set "SKIP_PAUSE=1"
+set "OPEN_REPORT=1"
+set "GENERATE_HTML=1"
+set "MODE=ASK"
 
 echo.
-echo  [Debug-CMD] A iniciar...
+echo  [Debug-CMD] Starting...
 
-if "%~1"=="" goto :sem_ficheiro
-if not exist "%~1" goto :sem_ficheiro
+if "%~1"=="" goto :no_file
+if not exist "%~1" goto :no_file
 
 set "DBG_TARGET=%~f1"
 set "DBG_SELF=%~f0"
-echo  Script alvo: "%DBG_TARGET%"
+echo  Target script: "%DBG_TARGET%"
 
-if not "%~2"=="" set "MODO=%~2"
-set "DBG_MODO=%MODO%"
-if /i not "%MODO%"=="ASK" goto :modo_ok
+if not "%~2"=="" set "MODE=%~2"
+set "DBG_MODE=%MODE%"
+if /i not "%MODE%"=="ASK" goto :mode_ok
 echo.
 echo  What do you want to do?
 echo    [E] Execute the script - it will REALLY run
 echo    [T] Test only - analyze it WITHOUT running anything
 choice /c ET /n /m " Choose E or T: "
-if errorlevel 2 (set "DBG_MODO=TEST") else (set "DBG_MODO=RUN")
-:modo_ok
-if /i "%DBG_MODO%"=="TEST" goto :executar
+if errorlevel 2 (set "DBG_MODE=TEST") else (set "DBG_MODE=RUN")
+:mode_ok
+if /i "%DBG_MODE%"=="TEST" goto :start_run
 
-if not "%ELEVAR%"=="1" goto :executar
-fltmc >nul 2>&1 && goto :executar
-echo  A pedir permissoes de administrador (UAC)...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:DBG_SELF -ArgumentList ([char]34 + $env:DBG_TARGET + [char]34 + [char]32 + $env:DBG_MODO) -Verb RunAs"
-if errorlevel 1 goto :falha_elevar
+if not "%ELEVATE%"=="1" goto :start_run
+fltmc >nul 2>&1 && goto :start_run
+echo  Requesting administrator rights (UAC)...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:DBG_SELF -ArgumentList ([char]34 + $env:DBG_TARGET + [char]34 + [char]32 + $env:DBG_MODE) -Verb RunAs"
+if errorlevel 1 goto :elevate_failed
 echo.
-echo  Foi aberta uma nova janela com permissoes de administrador.
-echo  A execucao continua nessa janela. Podes fechar esta.
-echo  Se a nova janela nao apareceu, poe ELEVAR a 0 no topo deste ficheiro.
+echo  A new window with administrator rights was opened.
+echo  The run continues in that window. You can close this one.
+echo  If the new window did not appear, set ELEVATE to 0 at the top of this file.
 echo.
 pause
 exit /b
 
-:falha_elevar
+:elevate_failed
 echo.
-echo  Nao foi possivel obter permissoes de administrador.
-echo  Dica: poe ELEVAR a 0 no topo deste ficheiro para correr sem administrador.
+echo  Could not get administrator rights.
+echo  Tip: set ELEVATE to 0 at the top of this file to run without administrator rights.
 echo.
 pause
 exit /b 1
 
-:executar
+:start_run
 set "DBG_PS1=%TEMP%\Debug-CMD_%RANDOM%.ps1"
-echo  A preparar o motor PowerShell...
+echo  Preparing the PowerShell engine...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$t=[IO.File]::ReadAllText($env:DBG_SELF,[Text.Encoding]::UTF8); $i=$t.IndexOf('#PS'+'_BEGIN'); [IO.File]::WriteAllText($env:DBG_PS1,$t.Substring($i),(New-Object Text.UTF8Encoding $true))"
-if errorlevel 1 goto :falha_ps
-if not exist "%DBG_PS1%" goto :falha_ps
-echo  A executar...
+if errorlevel 1 goto :ps_failed
+if not exist "%DBG_PS1%" goto :ps_failed
+echo  Running...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%DBG_PS1%"
 set "RC=%errorlevel%"
 echo.
 if "%RC%"=="0" del "%DBG_PS1%" >nul 2>&1
-if not "%RC%"=="0" echo  Codigo de saida: %RC%  (motor PowerShell guardado em "%DBG_PS1%" para diagnostico)
+if not "%RC%"=="0" echo  Exit code: %RC%  (PowerShell engine kept at "%DBG_PS1%" for diagnostics)
 echo.
 pause
 exit /b %RC%
 
-:falha_ps
+:ps_failed
 echo.
-echo  Falha ao preparar o motor PowerShell. Ve a mensagem de erro acima.
+echo  Failed to prepare the PowerShell engine. See the error message above.
 echo.
 pause
 exit /b 1
 
-:sem_ficheiro
+:no_file
 echo.
-echo  Arrasta um ficheiro .cmd ou .bat para cima deste ficheiro.
+echo  Drag a .cmd or .bat file onto this file.
 echo.
 pause
 exit /b 1
@@ -101,12 +101,12 @@ exit /b 1
 $ErrorActionPreference = 'Stop'
 $Alvo     = $env:DBG_TARGET
 $EchoOn   = ($env:ECHO_ON -ne '0')
-$IgnPause = ($env:IGNORAR_PAUSE -ne '0')
-$AbrirLog = ($env:ABRIR_LOG -ne '0')
+$IgnPause = ($env:SKIP_PAUSE -ne '0')
+$AbrirLog = ($env:OPEN_REPORT -ne '0')
 $utf8bom  = New-Object System.Text.UTF8Encoding($true)
 
 if (-not (Test-Path -LiteralPath $Alvo -PathType Leaf)) {
-    Write-Host "Ficheiro não encontrado: $Alvo" -ForegroundColor Red
+    Write-Host "File not found: $Alvo" -ForegroundColor Red
     exit 2
 }
 
@@ -180,7 +180,7 @@ document.querySelectorAll('[data-f]').forEach(function(b){b.addEventListener('cl
 }
 
 # ---------- TEST mode: static analysis, NOTHING is executed ----------
-if ($env:DBG_MODO -eq 'TEST') {
+if ($env:DBG_MODE -eq 'TEST') {
     $latin = [Text.Encoding]::GetEncoding(28591)
     $src   = [IO.File]::ReadAllText($Alvo, $latin) -split "\r?\n"
     $regras = @(
@@ -297,7 +297,7 @@ if ($env:DBG_MODO -eq 'TEST') {
     }
 
     $htmlTest = $null
-    if ($env:GERAR_HTML -ne '0') {
+    if ($env:GENERATE_HTML -ne '0') {
         try {
             $clsT = 'ok'
             if ($cont.HIGH -gt 0) { $clsT = 'bad' } elseif (($cont.MEDIUM -gt 0) -or ($problemas.Count -gt 0)) { $clsT = 'warn' }
@@ -359,7 +359,7 @@ $logPath = Join-Path $pasta ('{0}_debug_{1}.log' -f $nome, $inicio.ToString('yyy
 try {
     $sw = New-Object System.IO.StreamWriter($logPath, $false, $utf8bom)
 } catch {
-    # pasta sem permissão de escrita: usa a pasta temporária
+    # folder is not writable: use the temp folder
     $logPath = Join-Path $env:TEMP ([IO.Path]::GetFileName($logPath))
     $sw = New-Object System.IO.StreamWriter($logPath, $false, $utf8bom)
 }
@@ -380,13 +380,13 @@ function Add-Linha([string]$texto) {
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 try { $so = (Get-CimInstance Win32_OperatingSystem).Caption } catch { $so = [Environment]::OSVersion.VersionString }
 
-# ---------- cópia temporária com echo on (e pause ignorado) ----------
+# ---------- temporary copy with echo on (and pause skipped) ----------
 $aExecutar = $Alvo
 $copia     = $null
 $ajustes   = New-Object System.Collections.Generic.List[string]
 if ($EchoOn -or $IgnPause) {
     try {
-        $enc  = [Text.Encoding]::GetEncoding(28591)   # Latin-1: preserva os bytes do script tal e qual
+        $enc  = [Text.Encoding]::GetEncoding(28591)   # Latin-1: keeps the script's bytes exactly as they are
         $txt  = [IO.File]::ReadAllText($Alvo, $enc)
         $novo = $txt
         if ($EchoOn) {
@@ -395,8 +395,8 @@ if ($EchoOn -or $IgnPause) {
         }
         if ($IgnPause) {
             $antes = $novo
-            $novo  = [regex]::Replace($novo, '(?im)^([ \t]*)@?pause\b[^\r\n]*(?=\r?$)', '${1}echo [DEBUG] pause ignorado')
-            if ($novo -ne $antes) { $ajustes.Add('pause -> ignorado') }
+            $novo  = [regex]::Replace($novo, '(?im)^([ \t]*)@?pause\b[^\r\n]*(?=\r?$)', '${1}echo [DEBUG] pause skipped')
+            if ($novo -ne $antes) { $ajustes.Add('pause -> skipped') }
         }
         if ($novo -ne $txt) {
             $copia = Join-Path $pasta ('__dbg_' + $nome + $ext)
@@ -404,30 +404,30 @@ if ($EchoOn -or $IgnPause) {
             $aExecutar = $copia
         }
     } catch {
-        $ajustes.Add('não foi possível criar a cópia, a correr o original: ' + $_.Exception.Message)
+        $ajustes.Add('could not create the copy, running the original: ' + $_.Exception.Message)
         $copia = $null
         $aExecutar = $Alvo
     }
 }
 
-# ---------- cabeçalho do log ----------
+# ---------- log header ----------
 $sep = '=' * 78
 $sw.WriteLine($sep)
-$sw.WriteLine(' INFORMAÇÃO DA EXECUÇÃO')
+$sw.WriteLine(' RUN INFORMATION')
 $sw.WriteLine($sep)
 $sw.WriteLine("Script        : $Alvo")
-$sw.WriteLine('Início        : ' + $inicio.ToString('yyyy-MM-dd HH:mm:ss'))
-$sw.WriteLine("Utilizador    : $env:USERDOMAIN\$env:USERNAME")
+$sw.WriteLine('Started       : ' + $inicio.ToString('yyyy-MM-dd HH:mm:ss'))
+$sw.WriteLine("User          : $env:USERDOMAIN\$env:USERNAME")
 $sw.WriteLine("Windows       : $so")
-$sw.WriteLine('Administrador : ' + $(if ($admin) { 'Sim' } else { 'Não' }))
-$sw.WriteLine('Executado     : ' + $(if ($copia) { "cópia temporária ($aExecutar)" } else { 'ficheiro original' }))
-if ($ajustes.Count -gt 0) { $sw.WriteLine('Ajustes       : ' + ($ajustes -join '; ')) }
+$sw.WriteLine('Administrator : ' + $(if ($admin) { 'Yes' } else { 'No' }))
+$sw.WriteLine('Ran as        : ' + $(if ($copia) { "temporary copy ($aExecutar)" } else { 'original file' }))
+if ($ajustes.Count -gt 0) { $sw.WriteLine('Adjustments   : ' + ($ajustes -join '; ')) }
 $sw.WriteLine($sep)
-$sw.WriteLine(' LOG DETALHADO   [hora] saída do script (os comandos aparecem como C:\pasta>comando)')
+$sw.WriteLine(' DETAILED LOG   [time] script output (commands appear as C:\folder>command)')
 $sw.WriteLine($sep)
 
 Write-Host ''
-Write-Host "A executar: $Alvo" -ForegroundColor Cyan
+Write-Host "Running   : $Alvo" -ForegroundColor Cyan
 Write-Host "Log       : $logPath" -ForegroundColor DarkGray
 Write-Host ('-' * 70) -ForegroundColor DarkGray
 
@@ -435,19 +435,19 @@ function Concluir {
 $fim = Get-Date
 $dur = $cronometro.Elapsed.ToString('hh\:mm\:ss\.fff')
 $sw.WriteLine($sep)
-$sw.WriteLine('Fim           : ' + $fim.ToString('yyyy-MM-dd HH:mm:ss') + "   (duração $dur)")
-$sw.WriteLine("Código de saída: $codigo")
-if ($interrompido) { $sw.WriteLine('*** EXECUÇÃO INTERROMPIDA (Ctrl+C): o script não chegou ao fim ***') }
+$sw.WriteLine('Finished      : ' + $fim.ToString('yyyy-MM-dd HH:mm:ss') + "   (duration $dur)")
+$sw.WriteLine("Exit code: $codigo")
+if ($interrompido) { $sw.WriteLine('*** RUN INTERRUPTED (Ctrl+C): the script did not finish ***') }
 $sw.Close()
 
-# ---------- análise ----------
+# ---------- analysis ----------
 $rxPrompt = '^(?:[A-Za-z]:\\|\\\\)[^>]*>(?<c>.*)$'
 $rxErro   = '\b(erro|erros|error|errors)\b|\bfalh|\bfail|\bfatal\b|exce[pç]|n[aã]o [eé] reconhecido|not recognized|n[aã]o foi poss[ií]vel|n[aã]o consegu|n[aã]o foi encontrad|n[aã]o existe|o sistema n[aã]o|cannot find|could not find|does not exist|access is denied|acesso negado|permission denied|negad[oa]\b|denied|invalid|inv[aá]lid|sintaxe|syntax|unable to|utilizado por outro processo|used by another process|timed out|esgotad'
 $triv     = '^(rem(\s|$)|::|:[^\s:]|@?echo\s+(on|off)\b)'
 
 $entradas = New-Object System.Collections.Generic.List[object]
 $atual = [pscustomobject]@{
-    Cmd = '(saída sem comando associado)'; Hora = ''; Pseudo = $true
+    Cmd = '(output with no associated command)'; Hora = ''; Pseudo = $true
     Saida = (New-Object System.Collections.Generic.List[string])
     Problemas = (New-Object System.Collections.Generic.List[string])
 }
@@ -476,64 +476,64 @@ $bem      = @($cmds | Where-Object { $_.Problemas.Count -eq 0 })
 $totalErr = 0
 foreach ($e in $entradas) { $totalErr += $e.Problemas.Count }
 
-$estado = $(if ($interrompido) { 'INTERROMPIDO' } elseif (($codigo -ne 0) -or ($comProb.Count -gt 0)) { 'COM PROBLEMAS' } else { 'OK' })
-$nota   = $(if ($interrompido) { '   (interrompido: o script não chegou ao fim)' } elseif ($codigo -ne 0) { '   (diferente de 0: o último comando terminou com erro)' } else { '' })
+$estado = $(if ($interrompido) { 'INTERRUPTED' } elseif (($codigo -ne 0) -or ($comProb.Count -gt 0)) { 'WITH PROBLEMS' } else { 'OK' })
+$nota   = $(if ($interrompido) { '   (interrupted: the script did not finish)' } elseif ($codigo -ne 0) { '   (non-zero: the last command ended with an error)' } else { '' })
 
 $res = New-Object System.Collections.Generic.List[string]
-$res.Add($sep); $res.Add(' RESUMO'); $res.Add($sep)
+$res.Add($sep); $res.Add(' SUMMARY'); $res.Add($sep)
 $res.Add("Script           : $Alvo")
-$res.Add("Estado           : $estado")
-if ($interrompido) { $res.Add('Aviso            : a execução foi interrompida antes de o script terminar; o resultado abaixo é parcial.') }
-$res.Add("Código de saída  : $codigo$nota")
-$res.Add("Duração          : $dur")
-$res.Add("Comandos         : $($cmds.Count) executados | $($bem.Count) sem erros detetados | $($comProb.Count) com problemas")
-$res.Add("Linhas de erro   : $totalErr")
+$res.Add("Status           : $estado")
+if ($interrompido) { $res.Add('Warning          : the run was interrupted before the script finished; the results below are partial.') }
+$res.Add("Exit code        : $codigo$nota")
+$res.Add("Duration         : $dur")
+$res.Add("Commands         : $($cmds.Count) run | $($bem.Count) with no detected errors | $($comProb.Count) with problems")
+$res.Add("Error lines      : $totalErr")
 if ((-not $admin) -and (@($comProb | ForEach-Object { $_.Problemas }) -match 'acesso negado|access is denied')) {
-    $res.Add('Sugestão         : houve "acesso negado" e o script correu SEM administrador (ver opção ELEVAR no topo do Debug-CMD.cmd).')
+    $res.Add('Suggestion       : "access denied" occurred and the script ran WITHOUT administrator rights (see the ELEVATE option at the top of Debug-CMD.cmd).')
 }
 
 $res.Add('')
-$res.Add($sep); $res.Add(' O QUE FALHOU'); $res.Add($sep)
+$res.Add($sep); $res.Add(' WHAT FAILED'); $res.Add($sep)
 if ($comProb.Count -eq 0) {
-    $res.Add('Nenhum erro detetado.')
+    $res.Add('No errors detected.')
 } else {
     $n = 0
     foreach ($e in $comProb) {
         $n++
-        if ($n -gt 60) { $res.Add("... (+$($comProb.Count - 60) comandos com problemas; ver o log detalhado)"); break }
-        $res.Add(('[FALHOU] [{0}] {1}' -f $e.Hora, $e.Cmd))
+        if ($n -gt 60) { $res.Add("... (+$($comProb.Count - 60) more commands with problems; see the detailed log)"); break }
+        $res.Add(('[FAILED] [{0}] {1}' -f $e.Hora, $e.Cmd))
         foreach ($pl in ($e.Problemas | Select-Object -First 4)) { $res.Add("           > $pl") }
     }
 }
 
 $res.Add('')
-$res.Add($sep); $res.Add(' O QUE CORREU BEM  (comandos sem erros detetados)'); $res.Add($sep)
+$res.Add($sep); $res.Add(' WHAT WORKED  (commands with no detected errors)'); $res.Add($sep)
 if ($bem.Count -eq 0) {
-    $res.Add('(nenhum comando identificado)')
+    $res.Add('(no commands identified)')
 } else {
     $n = 0
     foreach ($e in $bem) {
         $n++
-        if ($n -gt 300) { $res.Add("... (+$($bem.Count - 300) omitidos; ver o log detalhado)"); break }
+        if ($n -gt 300) { $res.Add("... (+$($bem.Count - 300) omitted; see the detailed log)"); break }
         $res.Add(('[ OK ]   [{0}] {1}' -f $e.Hora, $e.Cmd))
     }
 }
 $res.Add('')
-$res.Add('Nota: "sem erros detetados" = nenhuma linha de erro conhecida na saída do comando. Comandos com >nul 2>&1 escondem os erros.')
+$res.Add('Note: "no detected errors" = no known error line in the command output. Commands using >nul 2>&1 hide their own errors.')
 $res.Add('')
 
-# resumo no topo do .log
+# summary at the top of the .log
 $corpo = [IO.File]::ReadAllLines($logPath, $utf8bom)
 $final = [string[]](@($res.ToArray()) + @($corpo))
 [IO.File]::WriteAllLines($logPath, $final, $utf8bom)
 
 # ---------- HTML report ----------
 $htmlPath = $null
-if ($env:GERAR_HTML -ne '0') {
+if ($env:GENERATE_HTML -ne '0') {
     try {
         $clsEstado = 'ok'
         $txtEstado = 'OK'
-        if ($estado -eq 'COM PROBLEMAS') { $clsEstado = 'bad'; $txtEstado = 'WITH PROBLEMS' } elseif ($estado -eq 'INTERROMPIDO') { $clsEstado = 'warn'; $txtEstado = 'INTERRUPTED' }
+        if ($estado -eq 'WITH PROBLEMS') { $clsEstado = 'bad'; $txtEstado = 'WITH PROBLEMS' } elseif ($estado -eq 'INTERRUPTED') { $clsEstado = 'warn'; $txtEstado = 'INTERRUPTED' }
 
         $cart = New-Object System.Collections.Generic.List[object]
         $cart.Add(@('Commands', $cmds.Count, ''))
@@ -605,17 +605,17 @@ if ($env:GERAR_HTML -ne '0') {
     }
 }
 
-# resumo no ecrã
+# summary on screen
 $cor = $(if ($estado -eq 'OK') { 'Green' } else { 'Red' })
 Write-Host ''
 Write-Host $sep -ForegroundColor DarkGray
-Write-Host " Estado: $estado   |   Código de saída: $codigo   |   Duração: $dur" -ForegroundColor $cor
-Write-Host " Comandos: $($cmds.Count) executados, $($bem.Count) sem erros, $($comProb.Count) com problemas"
+Write-Host " Status: $estado   |   Exit code: $codigo   |   Duration: $dur" -ForegroundColor $cor
+Write-Host " Commands: $($cmds.Count) run, $($bem.Count) without errors, $($comProb.Count) with problems"
 foreach ($e in ($comProb | Select-Object -First 10)) {
-    Write-Host ('  [FALHOU] ' + $e.Cmd) -ForegroundColor Yellow
+    Write-Host ('  [FAILED] ' + $e.Cmd) -ForegroundColor Yellow
     foreach ($pl in ($e.Problemas | Select-Object -First 2)) { Write-Host ('           > ' + $pl) -ForegroundColor DarkYellow }
 }
-if ($comProb.Count -gt 10) { Write-Host "  ... (+$($comProb.Count - 10) no log)" }
+if ($comProb.Count -gt 10) { Write-Host "  ... (+$($comProb.Count - 10) more in the log)" }
 Write-Host " Log: $logPath"
 if ($htmlPath) { Write-Host " HTML: $htmlPath" }
 Write-Host $sep -ForegroundColor DarkGray
@@ -625,10 +625,10 @@ if ($AbrirLog) {
 }
 }
 
-# ---------- execução ----------
+# ---------- execution ----------
 $cronometro   = [Diagnostics.Stopwatch]::StartNew()
 $codigo       = -1
-$interrompido = $true      # passa a $false quando a execução termina sem ser interrompida
+$interrompido = $true      # becomes $false when the run ends without being interrupted
 $p            = $null
 try {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -654,7 +654,7 @@ try {
             $pedaco      = [string]::new($buf, 0, $n)
             $ociosos     = 0
             $ultimoAviso = $cronometro.Elapsed
-            [Console]::Write($pedaco)      # o ecrã mostra tudo em tempo real, sem esperar por fim de linha
+            [Console]::Write($pedaco)      # the screen shows everything in real time, without waiting for end of line
             $pend += $pedaco
             while (($i = $pend.IndexOf("`n")) -ge 0) {
                 Add-Linha ($pend.Substring(0, $i))
@@ -662,13 +662,13 @@ try {
             }
             $tarefa = $reader.ReadAsync($buf, 0, $buf.Length)
         } elseif ($p.HasExited) {
-            # o script terminou mas deixou um processo em segundo plano com o pipe aberto: não ficar à espera
+            # the script finished but left a background process holding the pipe open: don't wait for it
             $ociosos++
             if ($ociosos -ge 8) { break }
         } elseif (($cronometro.Elapsed - $ultimoAviso).TotalSeconds -ge 10) {
-            # comando demorado e silencioso: avisa que continua vivo
+            # long, silent command: show that it is still alive
             $ultimoAviso = $cronometro.Elapsed
-            Write-Host ('  [Debug-CMD] a correr há ' + $cronometro.Elapsed.ToString('mm\:ss') + ' (sem saída nova; Ctrl+C interrompe e guarda o log)') -ForegroundColor DarkGray
+            Write-Host ('  [Debug-CMD] running for ' + $cronometro.Elapsed.ToString('mm\:ss') + ' (no new output; Ctrl+C interrupts and keeps the log)') -ForegroundColor DarkGray
         }
     }
     if ($pend.Length -gt 0) { Add-Linha $pend }
@@ -676,10 +676,10 @@ try {
     $codigo = $(if ($p.HasExited) { $p.ExitCode } else { -1 })
     $interrompido = $false
 } catch {
-    Add-Linha ('[DEBUG] Falha ao executar o script: ' + $_.Exception.Message)
+    Add-Linha ('[DEBUG] Failed to run the script: ' + $_.Exception.Message)
     $interrompido = $false
 } finally {
-    # corre sempre, também quando o utilizador carrega Ctrl+C: fecha o processo, apaga a cópia e escreve o resumo
+    # always runs, including on Ctrl+C: stops the process, deletes the copy and writes the summary
     $cronometro.Stop()
     if ($p -and (-not $p.HasExited)) {
         try { & $env:ComSpec /d /c "taskkill /PID $($p.Id) /T /F >nul 2>&1" } catch { }
@@ -688,6 +688,6 @@ try {
     if ($copia -and (Test-Path -LiteralPath $copia)) {
         Remove-Item -LiteralPath $copia -Force -ErrorAction SilentlyContinue
     }
-    try { Concluir } catch { Write-Host ('Erro ao gerar o resumo: ' + $_.Exception.Message) -ForegroundColor Red }
+    try { Concluir } catch { Write-Host ('Error while building the summary: ' + $_.Exception.Message) -ForegroundColor Red }
 }
 exit $codigo

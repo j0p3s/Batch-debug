@@ -13,10 +13,10 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 - **Debug linha a linha:** executa uma cópia temporária do script com `echo on`, por isso o log mostra cada comando antes da respetiva saída.
 - **Log com hora:** cada linha tem hora com milissegundos. O topo do log traz o utilizador, a versão do Windows e se correu como administrador.
 - **Resumo no topo do log e no ecrã:**
-  - estado final: `OK`, `COM PROBLEMAS` ou `INTERROMPIDO`;
+  - estado final: `OK`, `WITH PROBLEMS` ou `INTERRUPTED`;
   - código de saída e duração;
-  - **O QUE FALHOU:** comandos com erro e as linhas de erro respetivas;
-  - **O QUE CORREU BEM:** comandos sem erros detetados.
+  - **WHAT FAILED:** comandos com erro e as linhas de erro respetivas;
+  - **WHAT WORKED:** comandos sem erros detetados.
 - **Sem intervenção:** os `pause` da cópia são ignorados, para o script correr até ao fim.
 - **Robusto:** com Ctrl+C o log e o resumo ficam guardados, o processo é fechado e a cópia temporária é apagada.
 - **Não parece bloqueado:** em comandos demorados e silenciosos aparece "a correr há mm:ss" a cada 10 segundos.
@@ -37,7 +37,7 @@ Ao arrastar um script, és perguntado:
 - **`E` - Executar:** corre o script a sério e faz o debug (log + resumo).
 - **`T` - Só testar:** análise estática. O script só é lido, **nunca é executado**. Obténs um relatório `Nome_test_<data>.log` com o veredito de risco, as linhas que podem alterar o sistema (ALTO / MÉDIO / BAIXO) e problemas estruturais, como um `goto` para uma etiqueta que não existe ou um `call` para um ficheiro em falta.
 
-Põe `MODO` a `RUN` ou `TEST` para não perguntar.
+Põe `MODE` a `RUN` ou `TEST` para não perguntar.
 
 ## Opções
 
@@ -45,31 +45,31 @@ Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não):
 
 | Opção | Por defeito | O que faz |
 |---|---|---|
-| `ELEVAR` | `0` | Pede permissões de administrador (aparece o UAC uma vez) |
+| `ELEVATE` | `0` | Pede permissões de administrador (aparece o UAC uma vez) |
 | `ECHO_ON` | `1` | Força `echo on` na cópia temporária |
-| `IGNORAR_PAUSE` | `1` | Troca os `pause` da cópia por uma nota |
-| `ABRIR_LOG` | `1` | Abre o relatório no fim (HTML no browser, ou o log no Bloco de Notas) |
-| `GERAR_HTML` | `1` | Cria também o relatório `.html` ao lado do `.log` |
-| `MODO` | `ASK` | `ASK` pergunta sempre, `RUN` executa sempre, `TEST` só analisa (não executa nada) |
+| `SKIP_PAUSE` | `1` | Troca os `pause` da cópia por uma nota |
+| `OPEN_REPORT` | `1` | Abre o relatório no fim (HTML no browser, ou o log no Bloco de Notas) |
+| `GENERATE_HTML` | `1` | Cria também o relatório `.html` ao lado do `.log` |
+| `MODE` | `ASK` | `ASK` pergunta sempre, `RUN` executa sempre, `TEST` só analisa (não executa nada) |
 
-## Exemplo de resumo
+## Exemplo de resumo (o relatório está em inglês)
 
 ```
 ==============================================================================
- RESUMO
+ SUMMARY
 ==============================================================================
-Script           : C:\Scripts\exemplo.cmd
-Estado           : COM PROBLEMAS
-Código de saída  : 1   (diferente de 0: o último comando terminou com erro)
-Duração          : 00:00:03.412
-Comandos         : 6 executados | 5 sem erros detetados | 1 com problemas
-Linhas de erro   : 1
+Script           : C:\Scripts\example.cmd
+Status           : WITH PROBLEMS
+Exit code        : 1
+Duration         : 00:00:03.412
+Commands         : 6 run | 5 with no detected errors | 1 with problems
+Error lines      : 1
 
 ==============================================================================
- O QUE FALHOU
+ WHAT FAILED
 ==============================================================================
-[FALHOU] [23:10:16.531] copy origem.txt destino\
-           > O sistema não consegue localizar o ficheiro especificado.
+[FAILED] [23:10:16.531] copy source.txt dest\
+           > The system cannot find the file specified.
 ```
 
 ## Como funciona
@@ -87,7 +87,7 @@ Linhas de erro   : 1
 - Comandos com `>nul 2>&1` escondem os próprios erros.
 - Só o script arrastado é forçado a `echo on`. Os scripts que ele chama com `call` mantêm o `echo off` deles.
 - `%0`, `%~nx0` e semelhantes apontam para a cópia `__dbg_...`.
-- Os `pause` ignorados e a cópia mudam ligeiramente o comportamento do script. Desativa com `IGNORAR_PAUSE=0` e `ECHO_ON=0` se isso for um problema.
+- Os `pause` ignorados e a cópia mudam ligeiramente o comportamento do script. Desativa com `SKIP_PAUSE=0` e `ECHO_ON=0` se isso for um problema.
 - Se carregares Ctrl+C e aparecer "Terminate batch job (Y/N)?", responde `N` para ver o resumo.
 - Não use o Ctrl+C para copiar texto da janela: nesta consola interrompe a execução.
 

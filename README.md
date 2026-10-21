@@ -37,7 +37,7 @@ When you drag a script in, you are asked to choose:
 - **`E` - Execute:** runs the script for real and debugs it (log + summary).
 - **`T` - Test only:** static analysis. The script is only read, **never executed**. You get a `Name_test_<date>.log` report with the risk verdict, the lines that can change the system (grouped as HIGH / MEDIUM / LOW), and structural problems such as a `goto` to a label that doesn't exist or a `call` to a missing file.
 
-Set `MODO` to `RUN` or `TEST` to skip the question.
+Set `MODE` to `RUN` or `TEST` to skip the question.
 
 ## Options
 
@@ -45,12 +45,12 @@ These are at the top of `Debug-CMD.cmd` (`1` = yes, `0` = no):
 
 | Option | Default | What it does |
 |---|---|---|
-| `ELEVAR` | `0` | Requests administrator rights (one UAC prompt) |
+| `ELEVATE` | `0` | Requests administrator rights (one UAC prompt) |
 | `ECHO_ON` | `1` | Forces `echo on` in the temporary copy |
-| `IGNORAR_PAUSE` | `1` | Replaces `pause` in the copy with a note |
-| `ABRIR_LOG` | `1` | Opens the report when done (HTML in the browser, or the log in Notepad) |
-| `GERAR_HTML` | `1` | Also creates the `.html` report next to the `.log` |
-| `MODO` | `ASK` | `ASK` asks every time, `RUN` always executes, `TEST` only analyzes (executes nothing) |
+| `SKIP_PAUSE` | `1` | Replaces `pause` in the copy with a note |
+| `OPEN_REPORT` | `1` | Opens the report when done (HTML in the browser, or the log in Notepad) |
+| `GENERATE_HTML` | `1` | Also creates the `.html` report next to the `.log` |
+| `MODE` | `ASK` | `ASK` asks every time, `RUN` always executes, `TEST` only analyzes (executes nothing) |
 
 ## Example summary
 
@@ -72,8 +72,6 @@ Error lines      : 1
            > The system cannot find the file specified.
 ```
 
-The labels in the actual log are currently in Portuguese (`RESUMO`, `O QUE FALHOU`, `O QUE CORREU BEM`).
-
 ## How it works
 
 1. The `.cmd` extracts the PowerShell code embedded in it into a temporary `.ps1` file and runs it.
@@ -89,10 +87,9 @@ The labels in the actual log are currently in Portuguese (`RESUMO`, `O QUE FALHO
 - Commands using `>nul 2>&1` hide their own errors.
 - Only the dragged script is forced to `echo on`. Scripts it launches with `call` keep their own `echo off`.
 - `%0`, `%~nx0`, and similar point to the `__dbg_...` copy.
-- Skipping `pause` and using a copy slightly changes the script's behavior. Set `IGNORAR_PAUSE=0` and `ECHO_ON=0` if that matters.
+- Skipping `pause` and using a copy slightly changes the script's behavior. Set `SKIP_PAUSE=0` and `ECHO_ON=0` if that matters.
 - If you press Ctrl+C and see "Terminate batch job (Y/N)?", answer `N` to see the summary.
 - Don't use Ctrl+C to copy text from the window: in this console it interrupts the run.
-- The summary and log labels are in Portuguese for now.
 
 ## Requirements
 
