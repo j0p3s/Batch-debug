@@ -14,12 +14,14 @@ rem ---- Opcoes (1 = sim, 0 = nao) ----
 rem ELEVAR        pede permissoes de administrador (aparece o UAC uma vez)
 rem ECHO_ON       forca echo on numa copia temporaria do script
 rem IGNORAR_PAUSE troca os pause da copia por uma nota, para correr sem intervencao
-rem ABRIR_LOG     abre o .log no Bloco de Notas no fim
+rem ABRIR_LOG     abre o relatorio no fim (HTML no browser, ou o .log no Bloco de Notas)
+rem GERAR_HTML    cria tambem um relatorio .html facil de ler (ao lado do .log)
 rem MODO          ASK = pergunta de cada vez, RUN = executa, TEST = so analisa sem executar NADA
 set "ELEVAR=0"
 set "ECHO_ON=1"
 set "IGNORAR_PAUSE=1"
 set "ABRIR_LOG=1"
+set "GERAR_HTML=1"
 set "MODO=ASK"
 
 echo.
@@ -113,6 +115,70 @@ $nome    = [IO.Path]::GetFileNameWithoutExtension($Alvo)
 $ext     = [IO.Path]::GetExtension($Alvo)
 $inicio  = Get-Date
 
+# ---------- HTML report helpers ----------
+function EscHtml([string]$s) { return [System.Net.WebUtility]::HtmlEncode($s) }
+
+function Gravar-Html([string]$caminho, [string]$titulo, [string]$estado, [string]$classe, $cartoes, $info, [string]$corpo) {
+$css = @'
+:root{--bg:#fff;--fg:#1f2328;--mut:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ok:#1a7f37;--bad:#cf222e;--warn:#9a6700;--acc:#0969da}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--mut:#8b949e;--card:#161b22;--bd:#30363d;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#58a6ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,"Segoe UI",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 64px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:22px;margin:0;word-break:break-all}
+h2{font-size:17px;margin:32px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--bd)}
+.badge{padding:3px 12px;border-radius:999px;font-weight:600;font-size:13px;color:#fff}
+.badge.ok{background:var(--ok)}.badge.bad{background:var(--bad)}.badge.warn{background:var(--warn)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px}
+.card .v{font-size:24px;font-weight:600}.card .k{color:var(--mut);font-size:12px}
+.v.ok{color:var(--ok)}.v.bad{color:var(--bad)}.v.warn{color:var(--warn)}
+table{border-collapse:collapse;width:100%}
+.info th{text-align:left;color:var(--mut);font-weight:500;padding:4px 12px 4px 0;white-space:nowrap;vertical-align:top}
+.info td{padding:4px 0;word-break:break-all}
+code,pre,#log td{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+details{background:var(--card);border:1px solid var(--bd);border-radius:8px;margin:8px 0}
+details.fail{border-left:4px solid var(--bad)}
+summary{cursor:pointer;padding:8px 12px;display:flex;gap:10px;align-items:baseline}
+pre{margin:0;padding:8px 12px 12px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+.t{color:var(--mut);font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:nowrap;padding-right:10px}
+.err{color:var(--bad);font-weight:600}
+.none{color:var(--ok)}
+.tools{display:flex;gap:6px;margin:8px 0}
+.tools button{background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 12px;cursor:pointer}
+.tools button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#log td{padding:1px 6px;vertical-align:top;white-space:pre-wrap;word-break:break-word}
+#log tr.cmd td{color:var(--acc);font-weight:600;border-top:1px solid var(--bd)}
+#log tr.err td:last-child{color:var(--bad);font-weight:600}
+body[data-filter=cmd] #log tr:not(.cmd){display:none}
+body[data-filter=err] #log tr:not(.err){display:none}
+.lv{font-weight:700;font-size:11px;padding:1px 7px;border-radius:4px;color:#fff}
+.lv.HIGH,.lv.ERROR{background:var(--bad)}.lv.MEDIUM{background:var(--warn)}.lv.LOW{background:var(--mut)}
+.list td{padding:3px 8px 3px 0;vertical-align:top}
+'@
+$js = @'
+document.querySelectorAll('[data-f]').forEach(function(b){b.addEventListener('click',function(){document.body.setAttribute('data-filter',b.getAttribute('data-f'));document.querySelectorAll('[data-f]').forEach(function(x){x.classList.toggle('on',x===b)})})});
+'@
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.AppendLine('<!doctype html>')
+    [void]$sb.AppendLine('<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">')
+    [void]$sb.AppendLine('<title>' + (EscHtml $titulo) + '</title><style>' + $css + '</style></head><body data-filter="all"><main>')
+    [void]$sb.AppendLine('<header><h1>' + (EscHtml $titulo) + '</h1><span class="badge ' + $classe + '">' + (EscHtml $estado) + '</span></header>')
+    [void]$sb.AppendLine('<div class="cards">')
+    foreach ($c in $cartoes) {
+        [void]$sb.AppendLine('<div class="card"><div class="v ' + $c[2] + '">' + (EscHtml ([string]$c[1])) + '</div><div class="k">' + (EscHtml ([string]$c[0])) + '</div></div>')
+    }
+    [void]$sb.AppendLine('</div><table class="info">')
+    foreach ($i2 in $info) {
+        [void]$sb.AppendLine('<tr><th>' + (EscHtml ([string]$i2[0])) + '</th><td>' + (EscHtml ([string]$i2[1])) + '</td></tr>')
+    }
+    [void]$sb.AppendLine('</table>')
+    [void]$sb.AppendLine($corpo)
+    [void]$sb.AppendLine('</main><script>' + $js + '</script></body></html>')
+    [IO.File]::WriteAllText($caminho, $sb.ToString(), $utf8bom)
+}
+
 # ---------- TEST mode: static analysis, NOTHING is executed ----------
 if ($env:DBG_MODO -eq 'TEST') {
     $latin = [Text.Encoding]::GetEncoding(28591)
@@ -155,6 +221,7 @@ if ($env:DBG_MODO -eq 'TEST') {
     $achados   = New-Object System.Collections.Generic.List[string]
     $problemas = New-Object System.Collections.Generic.List[string]
     $cont      = @{ HIGH = 0; MEDIUM = 0; LOW = 0 }
+    $achadosObj = New-Object System.Collections.Generic.List[object]
     $comandos  = 0
     $precisaAdmin = $false
 
@@ -173,6 +240,7 @@ if ($env:DBG_MODO -eq 'TEST') {
                 $cont[$r[0]]++
                 $achados.Add(('[{0}] line {1}: {2}' -f $r[0], ($n + 1), $r[2]))
                 $achados.Add('           ' + $ex)
+                $achadosObj.Add(@($r[0], ($n + 1), $r[2], $ex))
             }
         }
         if ($t -match '(?i)\b(bcdedit|netsh|takeown|dism|sfc|schtasks|diskpart)\b|\bsc(\.exe)?\s|\breg\s+(add|delete|import)\s+"?hk(lm|ey_local_machine)') { $precisaAdmin = $true }
@@ -228,6 +296,48 @@ if ($env:DBG_MODO -eq 'TEST') {
         [IO.File]::WriteAllLines($testLog, [string[]]$rel.ToArray(), $utf8bom)
     }
 
+    $htmlTest = $null
+    if ($env:GERAR_HTML -ne '0') {
+        try {
+            $clsT = 'ok'
+            if ($cont.HIGH -gt 0) { $clsT = 'bad' } elseif (($cont.MEDIUM -gt 0) -or ($problemas.Count -gt 0)) { $clsT = 'warn' }
+            $txtT = $(if ($cont.HIGH -gt 0) { 'HIGH RISK' } elseif (($cont.MEDIUM -gt 0) -or ($problemas.Count -gt 0)) { 'MODERATE' } else { 'NO RISKS FOUND' })
+            $cartT = New-Object System.Collections.Generic.List[object]
+            $cartT.Add(@('High risk', $cont.HIGH, $(if ($cont.HIGH -gt 0) { 'bad' } else { 'ok' })))
+            $cartT.Add(@('Medium', $cont.MEDIUM, $(if ($cont.MEDIUM -gt 0) { 'warn' } else { 'ok' })))
+            $cartT.Add(@('Low', $cont.LOW, ''))
+            $cartT.Add(@('Structural problems', $problemas.Count, $(if ($problemas.Count -gt 0) { 'bad' } else { 'ok' })))
+            $cartT.Add(@('Commands', $comandos, ''))
+            $infoT = New-Object System.Collections.Generic.List[object]
+            $infoT.Add(@('Script', $Alvo))
+            $infoT.Add(@('Mode', 'TEST - static analysis, nothing was executed'))
+            $infoT.Add(@('Date', $inicio.ToString('yyyy-MM-dd HH:mm:ss')))
+            $infoT.Add(@('Verdict', $veredito))
+            if ($precisaAdmin) { $infoT.Add(@('Note', 'Probably needs administrator rights')) }
+            $bT = New-Object System.Text.StringBuilder
+            [void]$bT.AppendLine('<h2>Structural problems</h2>')
+            if ($problemas.Count -eq 0) { [void]$bT.AppendLine('<p class="none">None found.</p>') } else {
+                [void]$bT.AppendLine('<table class="list">')
+                foreach ($x in $problemas) { [void]$bT.AppendLine('<tr><td><span class="lv ERROR">ERROR</span></td><td>' + (EscHtml ($x -replace '^\[ERROR\]\s*', '')) + '</td></tr>') }
+                [void]$bT.AppendLine('</table>')
+            }
+            [void]$bT.AppendLine('<h2>Commands that can change the system</h2>')
+            if ($achadosObj.Count -eq 0) { [void]$bT.AppendLine('<p class="none">None recognized.</p>') } else {
+                [void]$bT.AppendLine('<table class="list">')
+                foreach ($a in $achadosObj) {
+                    [void]$bT.AppendLine('<tr><td><span class="lv ' + $a[0] + '">' + $a[0] + '</span></td><td class="t">line ' + $a[1] + '</td><td>' + (EscHtml ([string]$a[2])) + '<br><code>' + (EscHtml ([string]$a[3])) + '</code></td></tr>')
+                }
+                [void]$bT.AppendLine('</table>')
+            }
+            [void]$bT.AppendLine('<p class="k" style="color:var(--mut)">Nothing was run and no variable was expanded. Commands built from variables, scripts it calls, and anything decided at run time are not analyzed.</p>')
+            $htmlTest = [IO.Path]::ChangeExtension($testLog, '.html')
+            Gravar-Html $htmlTest ('Test report: ' + [IO.Path]::GetFileName($Alvo)) $txtT $clsT $cartT $infoT $bT.ToString()
+        } catch {
+            $htmlTest = $null
+            Write-Host ('Could not create the HTML report: ' + $_.Exception.Message) -ForegroundColor Yellow
+        }
+    }
+
     Write-Host ''
     foreach ($x in $rel) {
         $c = 'Gray'
@@ -239,7 +349,10 @@ if ($env:DBG_MODO -eq 'TEST') {
     }
     Write-Host ''
     Write-Host "Report saved to: $testLog" -ForegroundColor Cyan
-    if ($AbrirLog) { Start-Process notepad.exe -ArgumentList ('"' + $testLog + '"') }
+    if ($htmlTest) { Write-Host "HTML report: $htmlTest" -ForegroundColor Cyan }
+    if ($AbrirLog) {
+        if ($htmlTest) { Start-Process -FilePath $htmlTest } else { Start-Process notepad.exe -ArgumentList ('"' + $testLog + '"') }
+    }
     exit 0
 }
 $logPath = Join-Path $pasta ('{0}_debug_{1}.log' -f $nome, $inicio.ToString('yyyy-MM-dd_HH-mm-ss'))
@@ -414,6 +527,84 @@ $corpo = [IO.File]::ReadAllLines($logPath, $utf8bom)
 $final = [string[]](@($res.ToArray()) + @($corpo))
 [IO.File]::WriteAllLines($logPath, $final, $utf8bom)
 
+# ---------- HTML report ----------
+$htmlPath = $null
+if ($env:GERAR_HTML -ne '0') {
+    try {
+        $clsEstado = 'ok'
+        $txtEstado = 'OK'
+        if ($estado -eq 'COM PROBLEMAS') { $clsEstado = 'bad'; $txtEstado = 'WITH PROBLEMS' } elseif ($estado -eq 'INTERROMPIDO') { $clsEstado = 'warn'; $txtEstado = 'INTERRUPTED' }
+
+        $cart = New-Object System.Collections.Generic.List[object]
+        $cart.Add(@('Commands', $cmds.Count, ''))
+        $cart.Add(@('Worked', $bem.Count, 'ok'))
+        $cart.Add(@('With problems', $comProb.Count, $(if ($comProb.Count -gt 0) { 'bad' } else { 'ok' })))
+        $cart.Add(@('Exit code', $codigo, $(if ($codigo -ne 0) { 'bad' } else { 'ok' })))
+        $cart.Add(@('Duration', $dur, ''))
+
+        $inf = New-Object System.Collections.Generic.List[object]
+        $inf.Add(@('Script', $Alvo))
+        $inf.Add(@('Started', $inicio.ToString('yyyy-MM-dd HH:mm:ss')))
+        $inf.Add(@('User', "$env:USERDOMAIN\$env:USERNAME"))
+        $inf.Add(@('Windows', "$so"))
+        $inf.Add(@('Administrator', $(if ($admin) { 'Yes' } else { 'No' })))
+        $inf.Add(@('Ran as', $(if ($copia) { 'temporary copy with echo on' } else { 'original file' })))
+        if ($ajustes.Count -gt 0) { $inf.Add(@('Adjustments', ($ajustes -join '; '))) }
+        if ($interrompido) { $inf.Add(@('Warning', 'The run was interrupted before the script finished; results are partial.')) }
+        $inf.Add(@('Text log', $logPath))
+
+        $b = New-Object System.Text.StringBuilder
+        [void]$b.AppendLine('<h2>What failed</h2>')
+        if ($comProb.Count -eq 0) {
+            [void]$b.AppendLine('<p class="none">No errors detected.</p>')
+        } else {
+            foreach ($e in $comProb) {
+                [void]$b.AppendLine('<details open class="fail"><summary><span class="t">' + (EscHtml $e.Hora) + '</span><code>' + (EscHtml $e.Cmd) + '</code></summary><pre>')
+                $q = 0
+                foreach ($sl in $e.Saida) {
+                    $q++
+                    if ($q -gt 200) { [void]$b.AppendLine('... (more lines in the full log)'); break }
+                    if ($sl -match $rxErro) { [void]$b.AppendLine('<span class="err">' + (EscHtml $sl) + '</span>') } else { [void]$b.AppendLine((EscHtml $sl)) }
+                }
+                [void]$b.AppendLine('</pre></details>')
+            }
+        }
+
+        [void]$b.AppendLine('<h2>What worked</h2>')
+        if ($bem.Count -eq 0) {
+            [void]$b.AppendLine('<p>No commands identified.</p>')
+        } else {
+            [void]$b.AppendLine('<details><summary>' + $bem.Count + ' commands with no detected errors</summary><table class="list">')
+            $q = 0
+            foreach ($e in $bem) {
+                $q++
+                if ($q -gt 500) { [void]$b.AppendLine('<tr><td></td><td>... (more in the full log)</td></tr>'); break }
+                [void]$b.AppendLine('<tr><td class="t">' + (EscHtml $e.Hora) + '</td><td><code>' + (EscHtml $e.Cmd) + '</code></td></tr>')
+            }
+            [void]$b.AppendLine('</table></details>')
+        }
+
+        [void]$b.AppendLine('<h2>Full log</h2>')
+        [void]$b.AppendLine('<div class="tools"><button data-f="all" class="on">All</button><button data-f="cmd">Commands only</button><button data-f="err">Errors only</button></div>')
+        [void]$b.AppendLine('<table id="log">')
+        $limite = [Math]::Min($linhas.Count, 20000)
+        for ($k = 0; $k -lt $limite; $k++) {
+            $tx = $linhas[$k]
+            $rc = ''
+            if ([regex]::IsMatch($tx, $rxPrompt)) { $rc = 'cmd' } elseif ($tx -match $rxErro) { $rc = 'err' }
+            [void]$b.AppendLine('<tr class="' + $rc + '"><td class="t">' + (EscHtml $horas[$k]) + '</td><td>' + (EscHtml $tx) + '</td></tr>')
+        }
+        if ($linhas.Count -gt $limite) { [void]$b.AppendLine('<tr><td></td><td>... (' + ($linhas.Count - $limite) + ' more lines in the .log file)</td></tr>') }
+        [void]$b.AppendLine('</table>')
+
+        $htmlPath = [IO.Path]::ChangeExtension($logPath, '.html')
+        Gravar-Html $htmlPath ('Debug report: ' + [IO.Path]::GetFileName($Alvo)) $txtEstado $clsEstado $cart $inf $b.ToString()
+    } catch {
+        $htmlPath = $null
+        Write-Host ('Could not create the HTML report: ' + $_.Exception.Message) -ForegroundColor Yellow
+    }
+}
+
 # resumo no ecrã
 $cor = $(if ($estado -eq 'OK') { 'Green' } else { 'Red' })
 Write-Host ''
@@ -426,9 +617,12 @@ foreach ($e in ($comProb | Select-Object -First 10)) {
 }
 if ($comProb.Count -gt 10) { Write-Host "  ... (+$($comProb.Count - 10) no log)" }
 Write-Host " Log: $logPath"
+if ($htmlPath) { Write-Host " HTML: $htmlPath" }
 Write-Host $sep -ForegroundColor DarkGray
 
-if ($AbrirLog) { Start-Process notepad.exe -ArgumentList ('"' + $logPath + '"') }
+if ($AbrirLog) {
+    if ($htmlPath) { Start-Process -FilePath $htmlPath } else { Start-Process notepad.exe -ArgumentList ('"' + $logPath + '"') }
+}
 }
 
 # ---------- execução ----------

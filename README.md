@@ -8,6 +8,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 
 ## Features
 
+- **Easy-to-read HTML report:** besides the `.log`, you get a self-contained `.html` page (no internet needed) with a status badge, summary cards, expandable failed commands, a list of what worked, and a filterable full log. It follows your light/dark theme.
 - **Safe test mode:** choose `T` at the start to only analyze the script. Nothing is executed. It flags dangerous commands (delete, format, registry, shutdown, downloads...) and broken `goto`/`call` targets.
 - **Line-by-line debugging:** runs a temporary copy of your script with `echo on`, so the log shows each command right before its output.
 - **Timestamped log:** every line carries a time with milliseconds. The top of the log lists the user, the Windows version, and whether it ran as administrator.
@@ -25,7 +26,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 
 1. Download `Debug-CMD.cmd`.
 2. Drag your `.cmd` or `.bat` file onto it.
-3. When it finishes, the window stays open and the log opens in Notepad.
+3. When it finishes, the window stays open and the HTML report opens in your browser.
 
 The log is created next to your script and named `ScriptName_debug_YYYY-MM-DD_HH-MM-SS.log`. If that folder isn't writable, it goes to the temp folder instead.
 
@@ -47,7 +48,8 @@ These are at the top of `Debug-CMD.cmd` (`1` = yes, `0` = no):
 | `ELEVAR` | `0` | Requests administrator rights (one UAC prompt) |
 | `ECHO_ON` | `1` | Forces `echo on` in the temporary copy |
 | `IGNORAR_PAUSE` | `1` | Replaces `pause` in the copy with a note |
-| `ABRIR_LOG` | `1` | Opens the log in Notepad when done |
+| `ABRIR_LOG` | `1` | Opens the report when done (HTML in the browser, or the log in Notepad) |
+| `GERAR_HTML` | `1` | Also creates the `.html` report next to the `.log` |
 | `MODO` | `ASK` | `ASK` asks every time, `RUN` always executes, `TEST` only analyzes (executes nothing) |
 
 ## Example summary

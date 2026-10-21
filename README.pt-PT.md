@@ -8,6 +8,7 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 
 ## Funcionalidades
 
+- **Relatório HTML fácil de ler:** além do `.log`, geras uma página `.html` autónoma (não precisa de internet) com estado, cartões de resumo, comandos falhados expansíveis, lista do que correu bem e log completo filtrável. Acompanha o tema claro/escuro.
 - **Modo de teste seguro:** escolhe `T` no início para só analisar o script. Nada é executado. Assinala comandos perigosos (apagar, formatar, registo, desligar, downloads...) e destinos de `goto`/`call` inexistentes.
 - **Debug linha a linha:** executa uma cópia temporária do script com `echo on`, por isso o log mostra cada comando antes da respetiva saída.
 - **Log com hora:** cada linha tem hora com milissegundos. O topo do log traz o utilizador, a versão do Windows e se correu como administrador.
@@ -25,7 +26,7 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 
 1. Descarrega o `Debug-CMD.cmd`.
 2. Arrasta o teu `.cmd` ou `.bat` para cima dele.
-3. No fim, a janela fica aberta e o log abre no Bloco de Notas.
+3. No fim, a janela fica aberta e o relatório HTML abre no browser.
 
 O log é criado ao lado do script, com o nome `NomeDoScript_debug_AAAA-MM-DD_HH-MM-SS.log`. Se a pasta não permitir escrita, vai para a pasta temporária.
 
@@ -47,7 +48,8 @@ Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não):
 | `ELEVAR` | `0` | Pede permissões de administrador (aparece o UAC uma vez) |
 | `ECHO_ON` | `1` | Força `echo on` na cópia temporária |
 | `IGNORAR_PAUSE` | `1` | Troca os `pause` da cópia por uma nota |
-| `ABRIR_LOG` | `1` | Abre o log no Bloco de Notas no fim |
+| `ABRIR_LOG` | `1` | Abre o relatório no fim (HTML no browser, ou o log no Bloco de Notas) |
+| `GERAR_HTML` | `1` | Cria também o relatório `.html` ao lado do `.log` |
 | `MODO` | `ASK` | `ASK` pergunta sempre, `RUN` executa sempre, `TEST` só analisa (não executa nada) |
 
 ## Exemplo de resumo
