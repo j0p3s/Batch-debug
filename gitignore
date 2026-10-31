@@ -2,6 +2,7 @@
 *_debug_*.log
 __dbg_*
 Debug-CMD_*.ps1
+*_debug_*.ps1
 
 # Windows
 Thumbs.db

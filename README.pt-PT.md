@@ -10,6 +10,8 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 
 - **Relatório HTML fácil de ler:** além do `.log`, geras uma página `.html` autónoma (não precisa de internet) com estado, cartões de resumo, comandos falhados expansíveis, lista do que correu bem e log completo filtrável. Acompanha o tema claro/escuro.
 - **PowerShell também fica no log:** se o script escreve ficheiros `.ps1` ou corre PowerShell, o log guarda o conteúdo completo de cada `.ps1` que ele escreve ou corre (mesmo os temporários que o script apaga logo a seguir), cada PowerShell que ele arranca (mesmo quando o comando não aparece com o echo), o `-EncodedCommand` descodificado e a linha do `.ps1` onde o PowerShell deu erro.
+- **Ferramentas de um só `.cmd` também:** muitas ferramentas trazem o PowerShell dentro do `.cmd` e correm-no a partir da memória (`Invoke-Expression`), por isso nunca existe um `.ps1` no disco. O Debug-CMD recorta esse código do ficheiro tal como o PowerShell faz, regista-o com números de linha e guarda-o ao lado do log como `<nome>_debug_<data>.embedded1.ps1`, para os `At line:N` do PowerShell coincidirem com esse ficheiro.
+- **Scripts que pedem administrador:** com `ELEVATE=AUTO` (o valor por defeito), o Debug-CMD corre como administrador quando o script contém `runas`, `fltmc`, `net session` e semelhantes. Se não o fizer, o script reinicia-se numa janela nova que não se consegue seguir.
 - **Modo de teste seguro:** escolhe `T` no início para só analisar o script. Nada é executado. Assinala comandos perigosos (apagar, formatar, registo, desligar, downloads...) no script, no PowerShell embutido ou codificado e nos `.ps1` que ele usa e que já existem no disco, além de destinos de `goto`/`call` inexistentes.
 - **Debug linha a linha:** executa uma cópia temporária do script com `echo on`, por isso o log mostra cada comando antes da respetiva saída.
 - **Log com hora:** cada linha tem hora com milissegundos. O topo do log traz o utilizador, a versão do Windows e se correu como administrador.
@@ -42,11 +44,11 @@ Põe `MODE` a `RUN` ou `TEST` para não perguntar.
 
 ## Opções
 
-Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não):
+Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não; `ELEVATE` e `MODE` usam palavras):
 
 | Opção | Por defeito | O que faz |
 |---|---|---|
-| `ELEVATE` | `0` | Pede permissões de administrador (aparece o UAC uma vez) |
+| `ELEVATE` | `AUTO` | `0` nunca, `1` sempre, `AUTO` só quando o script pede administrador (aparece o UAC uma vez) |
 | `ECHO_ON` | `1` | Força `echo on` na cópia temporária |
 | `SKIP_PAUSE` | `1` | Troca os `pause` da cópia por uma nota |
 | `OPEN_REPORT` | `1` | Abre o relatório no fim (HTML no browser, ou o log no Bloco de Notas) |
@@ -66,7 +68,7 @@ Exit code        : 1
 Duration         : 00:00:03.412
 Commands         : 6 run | 5 with no detected errors | 1 with problems
 Error lines      : 1
-PowerShell       : 1 run(s) | 1 .ps1 file(s) logged
+PowerShell       : 1 run(s) | 1 .ps1 file(s) logged | 0 script(s) run from memory
 
 ==============================================================================
  WHAT FAILED
@@ -89,7 +91,8 @@ PowerShell       : 1 run(s) | 1 .ps1 file(s) logged
 2. O PowerShell cria uma cópia do script alvo (`__dbg_<nome>`) com `echo off` → `echo on` e `pause` ignorado. A cópia preserva os bytes do original.
 3. Corre a cópia com `cmd /c`, junta `stdout` e `stderr` pela ordem em que aparecem e regista cada linha com hora.
 4. Durante a execução, um vigilante de ficheiros na pasta do script e no `%TEMP%` (incluindo subpastas) lê cada `.ps1` no momento em que é escrito, e um vigilante de processos deteta cada PowerShell que o script arranca. Os `.ps1` indicados em comandos `powershell` que aparecem no echo também são lidos, estejam onde estiverem. O CLIXML que o PowerShell escreve quando a saída é redirecionada volta a ser texto legível.
-5. No fim, o log é analisado: as linhas que correspondem a padrões de erro (português e inglês) são associadas ao comando que as produziu, e cada `.ps1` capturado é acrescentado ao log com números de linha.
+5. Quando um comando PowerShell lê código de um ficheiro e o corre com `Invoke-Expression` / `iex` (por exemplo `$t.Substring($t.IndexOf('#PS-BEGIN'))` ou `iex (${ficheiro.cmd} | out-string)`), o mesmo código é recortado desse ficheiro, registado como "run from memory" e guardado como um `.ps1` verdadeiro ao lado do log.
+6. No fim, o log é analisado: as linhas que correspondem a padrões de erro (português e inglês) são associadas ao comando que as produziu, e cada `.ps1` capturado é acrescentado ao log com números de linha.
 
 ## Limitações
 
@@ -99,6 +102,8 @@ PowerShell       : 1 run(s) | 1 .ps1 file(s) logged
 - Comandos com `>nul 2>&1` escondem os próprios erros.
 - Só o script arrastado é forçado a `echo on`. Os scripts que ele chama com `call` mantêm o `echo off` deles.
 - `%0`, `%~nx0` e semelhantes apontam para a cópia `__dbg_...`.
+- O código PowerShell construído ou descarregado em tempo de execução (por exemplo `iex (irm https://...)`, ou um texto montado em memória) não se consegue recortar de um ficheiro. A linha de comandos fica no log por inteiro, mas o código não.
+- Um script que se reinicia como administrador noutra janela (`Start-Process -Verb RunAs`) só se consegue seguir se o próprio Debug-CMD correr como administrador. O log avisa disso e guarda a cópia temporária.
 - Um `.ps1` escrito fora da pasta do script e do `%TEMP%` só fica no log se for visto um comando PowerShell que o corra. Um PowerShell que não aparece no echo e termina em menos de cerca de meio segundo pode escapar ao vigilante de processos.
 - Se a captura em direto não puder arrancar (por exemplo, uma política que bloqueie a compilação), só ficam no log os `.ps1` corridos por comandos que aparecem no echo. O log indica-o.
 - Os `pause` ignorados e a cópia mudam ligeiramente o comportamento do script. Desativa com `SKIP_PAUSE=0` e `ECHO_ON=0` se isso for um problema.

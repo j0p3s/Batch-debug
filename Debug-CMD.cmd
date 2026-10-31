@@ -13,7 +13,10 @@ rem  The window always stays open at the end (pause) so you can read the result.
 rem ======================================================================
 
 rem ---- Options (1 = yes, 0 = no) ----
-rem ELEVATE         asks for administrator rights (one UAC prompt)
+rem ELEVATE         asks for administrator rights (one UAC prompt): 0 = never, 1 = always,
+rem                 AUTO = only when the script itself asks for them (runas, fltmc, net session...)
+rem                 A script that restarts itself as administrator cannot be followed
+rem                 unless Debug-CMD already runs as administrator
 rem ECHO_ON         forces echo on in a temporary copy of the script
 rem SKIP_PAUSE      replaces pause in the copy with a note, so it runs hands-off
 rem OPEN_REPORT     opens the report when done (HTML in the browser, or the .log in Notepad)
@@ -22,7 +25,7 @@ rem LOG_PS1         also logs PowerShell: the .ps1 files the script writes or ru
 rem                 contents, even if the script deletes them), the PowerShell processes it
 rem                 starts, and decoded -EncodedCommand payloads
 rem MODE            ASK = ask every time, RUN = execute, TEST = only analyze, execute NOTHING
-set "ELEVATE=0"
+set "ELEVATE=AUTO"
 set "ECHO_ON=1"
 set "SKIP_PAUSE=1"
 set "OPEN_REPORT=1"
@@ -51,6 +54,11 @@ choice /c ET /n /m " Choose E or T: "
 if errorlevel 2 (set "DBG_MODE=TEST") else (set "DBG_MODE=RUN")
 :mode_ok
 if /i "%DBG_MODE%"=="TEST" goto :start_run
+
+if /i not "%ELEVATE%"=="AUTO" goto :elevate_decided
+findstr /i /c:"runas" /c:"fltmc" /c:"net session" /c:"requireAdministrator" /c:"IsInRole" /c:"openfiles" "%DBG_TARGET%" >nul 2>&1 && set "ELEVATE=1"
+if "%ELEVATE%"=="1" echo  This script asks for administrator rights, so Debug-CMD will run as administrator to capture everything.
+:elevate_decided
 
 if not "%ELEVATE%"=="1" goto :start_run
 fltmc >nul 2>&1 && goto :start_run
@@ -305,7 +313,7 @@ function Texto-Fonte([string]$texto, $erros) {
     $nl  = 0
     foreach ($tl in $ls) {
         $nl++
-        if ($nl -gt 5000) { $out.Add('        ... (' + ($ls.Count - 5000) + ' more lines not shown)'); break }
+        if ($nl -gt 20000) { $out.Add('        ... (' + ($ls.Count - 20000) + ' more lines not shown)'); break }
         $mk = $(if (($null -ne $erros) -and $erros.ContainsKey($nl)) { '>>' } else { '  ' })
         $out.Add(('{0}{1,5} | {2}' -f $mk, $nl, $tl))
     }
@@ -319,7 +327,7 @@ function Html-Fonte([string]$texto, $erros) {
     $nl = 0
     foreach ($tl in $ls) {
         $nl++
-        if ($nl -gt 5000) { [void]$sb2.AppendLine('<tr><td class="n"></td><td>... (' + ($ls.Count - 5000) + ' more lines not shown)</td></tr>'); break }
+        if ($nl -gt 20000) { [void]$sb2.AppendLine('<tr><td class="n"></td><td>... (' + ($ls.Count - 20000) + ' more lines not shown)</td></tr>'); break }
         $er = (($null -ne $erros) -and $erros.ContainsKey($nl))
         [void]$sb2.AppendLine('<tr' + $(if ($er) { ' class="e" title="PowerShell reported an error at this line"' } else { '' }) + '><td class="n">' + $nl + '</td><td>' + (EscHtml $tl) + '</td></tr>')
     }
@@ -906,12 +914,13 @@ public class DbgPsCapture : IDisposable
 '@
 
 $psLista    = New-Object System.Collections.Generic.List[object]   # .ps1 files logged, in order of first sight
+$psEmbLista = New-Object System.Collections.Generic.List[object]   # code run from memory (also listed in $psLista)
 $psMapa     = @{}                                                   # path -> entry of $psLista
 $psExec     = New-Object System.Collections.Generic.List[object]   # PowerShell runs
 $psNotas    = New-Object System.Collections.Generic.List[string]   # notes about the capture itself
 $psSeguidos = @{}                                                   # path -> .ps1 re-read whenever it changes
 $psPendProc = New-Object System.Collections.Generic.List[object]   # PowerShell processes waiting for their echoed line
-$psEstado   = @{ Pasta = $pasta; Tick = [DateTime]::MinValue; Modo = 'off' }
+$psEstado   = @{ Pasta = $pasta; Tick = [DateTime]::MinValue; Modo = 'off'; Elevou = $false }
 $psCap      = $null
 $rxPromptD  = '^(?<d>(?:[A-Za-z]:\\|\\\\)[^>]*)>(?<c>.*)$'
 
@@ -977,6 +986,50 @@ function Ps-Correu([string]$c) {
     }
 }
 
+# code that PowerShell reads from a file and runs from memory (iex / Invoke-Expression): there is no .ps1 on
+# disk, so the code is cut out of that file the same way PowerShell does it and logged like a .ps1 file
+function Ps-Embutido($ex) {
+    $tudo = $ex.Cmd + ' ' + $ex.Decod
+    if ($tudo -notmatch '(?i)\b(?:invoke-expression|iex)\b') { return }
+    if ($tudo -notmatch '(?i)ReadAllText|ReadAllLines|Get-Content|\bgc\b|\$\{[^}]+\}') { return }
+    # where the code starts: .IndexOf('#'+'MARKER') in the command, otherwise the whole file
+    $marca = $null
+    $mi = [regex]::Match($tudo, '(?i)IndexOf\(\s*(?<m>(?:''[^'']*''|"[^"]*")(?:\s*\+\s*(?:''[^'']*''|"[^"]*"))*)\s*[,)]')
+    if ($mi.Success) {
+        $marca = ''
+        foreach ($mp in [regex]::Matches($mi.Groups['m'].Value, '''([^'']*)''|"([^"]*)"')) { $marca += $mp.Groups[1].Value + $mp.Groups[2].Value }
+        if ($marca.Length -eq 0) { $marca = $null }
+    }
+    # the file: ${C:\x.cmd}, a path written in the command, or (for $env:NAME) the script being debugged
+    $cands = New-Object System.Collections.Generic.List[string]
+    foreach ($mc in [regex]::Matches($tudo, '(?i)(?:\$\{|["''(\s])(?<p>[A-Za-z]:\\[^"''|<>*?{}]*?\.(?:cmd|bat|ps1|psm1|txt))')) {
+        $cp = Ps-Resolver $mc.Groups['p'].Value $psEstado.Pasta
+        if ($cp -and (-not $cands.Contains($cp))) { $cands.Add($cp) }
+    }
+    foreach ($cp in @($aExecutar, $Alvo)) { if ($cp -and (-not $cands.Contains($cp))) { $cands.Add($cp) } }
+    foreach ($cp in $cands) {
+        $tx = Ps-Ler $cp
+        if (($null -eq $tx) -or $tx.StartsWith('[Debug-CMD] not logged')) { continue }
+        $trecho = $tx
+        if ($marca) {
+            $ix = $tx.IndexOf($marca, [StringComparison]::Ordinal)
+            if ($ix -lt 0) { continue }
+            $trecho = $tx.Substring($ix)
+        }
+        $rot = '[in memory] ' + $(if ($marca) { 'from "' + $marca + '" to the end of ' } else { 'whole file ' }) + $cp
+        if ($psMapa.ContainsKey($rot)) { return }
+        $en = [pscustomobject]@{ Path = $rot; Origem = 'memory'; Versoes = (New-Object System.Collections.Generic.List[object]); Corridas = 1; Apagado = $false; Arquivo = $null }
+        $en.Versoes.Add([pscustomobject]@{ Texto = $trecho; Hora = (Get-Date).ToString('HH:mm:ss.fff'); Correu = $true })
+        $psMapa[$rot] = $en
+        $psLista.Add($en)
+        $psEmbLista.Add($en)
+        $ex.Ps1.Add($rot)
+        Add-Marca ('PowerShell code run from memory (no .ps1 on disk): ' + $rot + ' (' + (Ps-Linhas $trecho).Count + ' lines)')
+        return
+    }
+    Ps-Nota 'PowerShell reads code from a file and runs it from memory, but the file could not be identified, so that code is not logged'
+}
+
 function Ps-NovaExec([string]$fonte, [string]$cmd, $procId) {
     $agora = Get-Date
     if ([string]::IsNullOrWhiteSpace($cmd)) { $cmd = '(command line not available)' }
@@ -1005,6 +1058,11 @@ function Ps-NovaExec([string]$fonte, [string]$cmd, $procId) {
     foreach ($tk in (Ps-Ps1Tokens $tudo)) {
         $c = Ps-Resolver $tk $psEstado.Pasta
         if ($c -and (-not $ex.Ps1.Contains($c))) { Ps-Seguir $c }
+    }
+    try { Ps-Embutido $ex } catch { Ps-Nota ('code run from memory: ' + $_.Exception.Message) }
+    if ((-not $admin) -and (-not $psEstado.Elevou) -and ($tudo -match '(?i)-Verb\s+RunAs')) {
+        $psEstado.Elevou = $true
+        Ps-Nota 'The script restarted itself with administrator rights in a new window, which Debug-CMD cannot follow. Run Debug-CMD as administrator (ELEVATE=1) to capture it. The temporary copy was kept.'
     }
 }
 
@@ -1181,9 +1239,20 @@ foreach ($l in $linhas) {
         $psErr[$kp][[int]$mm.Groups['n'].Value] = $true
     }
 }
+# code run from memory: "At line:N char:M" counts from the start of that code
+if ($psEmbLista.Count -eq 1) {
+    $kp = $psEmbLista[0].Path
+    foreach ($l in $linhas) {
+        foreach ($mm in [regex]::Matches($l, '(?i)\bAt line:(?<n>\d+) char:\d+')) {
+            if (-not $psErr.ContainsKey($kp)) { $psErr[$kp] = @{} }
+            $psErr[$kp][[int]$mm.Groups['n'].Value] = $true
+        }
+    }
+}
 function Ps-Descricao($pe) {
     $d = New-Object System.Collections.Generic.List[string]
-    $d.Add($(if ($pe.Origem -eq 'written') { 'written during the run' } else { 'captured when it ran' }))
+    $d.Add($(if ($pe.Origem -eq 'written') { 'written during the run' } elseif ($pe.Origem -eq 'memory') { 'no file on disk: the script runs this code from memory' } else { 'captured when it ran' }))
+    if (($pe.Origem -eq 'memory') -and $pe.Arquivo) { $d.Add('saved as ' + $pe.Arquivo) }
     $d.Add($(if ($pe.Corridas -gt 0) { 'ran ' + $pe.Corridas + 'x' } else { 'not seen running' }))
     if ($pe.Apagado) { $d.Add('deleted before the end') }
     $nlin = (Ps-Linhas $pe.Versoes[$pe.Versoes.Count - 1].Texto).Count
@@ -1193,10 +1262,20 @@ function Ps-Descricao($pe) {
     if ($er -and ($er.Count -gt 0)) { $d.Add('PowerShell error at line ' + ((@($er.Keys) | Sort-Object) -join ', ')) }
     return ($d -join ' | ')
 }
+# code run from memory is also saved as a real .ps1 next to the log (line numbers match PowerShell's "At line:N")
+$ne = 0
+foreach ($pe in $psEmbLista) {
+    $ne++
+    try {
+        $pf = [IO.Path]::ChangeExtension($logPath, ('embedded' + $ne + '.ps1'))
+        [IO.File]::WriteAllText($pf, $pe.Versoes[$pe.Versoes.Count - 1].Texto, $utf8bom)
+        $pe.Arquivo = $pf
+    } catch { }
+}
 if ($psLista.Count -gt 0) {
     $sw.WriteLine('')
     $sw.WriteLine($sep)
-    $sw.WriteLine(' POWERSHELL SCRIPTS (.ps1) - FULL CONTENTS   (">>" = PowerShell reported an error at that line)')
+    $sw.WriteLine(' POWERSHELL SCRIPTS - FULL CONTENTS (.ps1 files and code run from memory)   (">>" = PowerShell reported an error at that line)')
     $sw.WriteLine($sep)
     $np = 0
     foreach ($pe in $psLista) {
@@ -1210,6 +1289,22 @@ if ($psLista.Count -gt 0) {
             if ($pe.Versoes.Count -gt 1) { $sw.WriteLine(('     -- version {0} of {1}, last change {2}{3}' -f $nv, $pe.Versoes.Count, $pv.Hora, $(if ($pv.Correu) { ', ran' } else { '' }))) }
             foreach ($x in (Texto-Fonte $pv.Texto $psErr[$pe.Path])) { $sw.WriteLine($x) }
         }
+    }
+}
+$largos = @($psExec | Where-Object { $_.Cmd.Length -gt 220 })
+if ($largos.Count -gt 0) {
+    $sw.WriteLine('')
+    $sw.WriteLine($sep)
+    $sw.WriteLine(' POWERSHELL COMMAND LINES - FULL   (code passed on the command line is part of it)')
+    $sw.WriteLine($sep)
+    $np = 0
+    foreach ($px in $largos) {
+        $np++
+        $sw.WriteLine('')
+        $sw.WriteLine(('---- [{0}] {1}{2}' -f $np, $px.Hora, $(if ($px.Pid) { ' (PID ' + $px.Pid + ')' } else { '' })))
+        $cl = $px.Cmd
+        if ($cl.Length -gt 20000) { $cl = $cl.Substring(0, 20000) + ' [... cut at 20000 characters]' }
+        $sw.WriteLine($cl)
     }
 }
 $sw.Close()
@@ -1262,7 +1357,7 @@ $res.Add("Exit code        : $codigo$nota")
 $res.Add("Duration         : $dur")
 $res.Add("Commands         : $($cmds.Count) run | $($bem.Count) with no detected errors | $($comProb.Count) with problems")
 $res.Add("Error lines      : $totalErr")
-if ($LogPs1) { $res.Add(('PowerShell       : {0} run(s) | {1} .ps1 file(s) logged' -f $psExec.Count, $psLista.Count)) }
+if ($LogPs1) { $res.Add(('PowerShell       : {0} run(s) | {1} .ps1 file(s) logged | {2} script(s) run from memory' -f $psExec.Count, ($psLista.Count - $psEmbLista.Count), $psEmbLista.Count)) }
 if ((-not $admin) -and (@($comProb | ForEach-Object { $_.Problemas }) -match 'acesso negado|access is denied')) {
     $res.Add('Suggestion       : "access denied" occurred and the script ran WITHOUT administrator rights (see the ELEVATE option at the top of Debug-CMD.cmd).')
 }
@@ -1281,6 +1376,7 @@ if ($comProb.Count -eq 0) {
     }
 }
 
+if ($LogPs1 -and ($psExec.Count -gt 0) -and ($psLista.Count -eq 0)) { Ps-Nota 'No .ps1 file was written or run and no code read from a file was recognized: the PowerShell code was passed on the command line (see the full command lines at the end of the log) or is built at run time' }
 $temPs = ($LogPs1 -and (($psExec.Count + $psLista.Count + $psNotas.Count) -gt 0))
 if ($temPs) {
     $res.Add('')
@@ -1341,7 +1437,8 @@ if ($env:GENERATE_HTML -ne '0') {
         $cart.Add(@('Duration', $dur, ''))
         if ($LogPs1 -and (($psExec.Count + $psLista.Count) -gt 0)) {
             $cart.Add(@('PowerShell runs', $psExec.Count, ''))
-            $cart.Add(@('.ps1 files logged', $psLista.Count, ''))
+            $cart.Add(@('.ps1 files logged', ($psLista.Count - $psEmbLista.Count), ''))
+            if ($psEmbLista.Count -gt 0) { $cart.Add(@('Run from memory', $psEmbLista.Count, '')) }
         }
 
         $inf = New-Object System.Collections.Generic.List[object]
@@ -1385,6 +1482,7 @@ if ($env:GENERATE_HTML -ne '0') {
                     if ($px.Fonte -eq 'process') { $det += '<div class="sub">PID ' + $px.Pid + ', not shown by echo (found by watching processes)</div>' }
                     foreach ($f1 in $px.Ps1) { $det += '<div class="sub">runs ' + (EscHtml $f1) + '</div>' }
                     if ($px.Decod) { $det += '<div class="sub">decoded -EncodedCommand:</div><pre>' + (EscHtml $px.Decod) + '</pre>' }
+                    if ($px.Cmd.Length -gt 1000) { $det += '<div class="sub">full command line:</div><pre>' + (EscHtml $px.Cmd.Substring(0, [Math]::Min($px.Cmd.Length, 20000))) + '</pre>' }
                     [void]$b.AppendLine('<tr><td class="t">' + (EscHtml $px.Hora) + '</td><td><code>' + (EscHtml (Ps-Curto $px.Cmd 1000)) + '</code>' + $det + '</td></tr>')
                 }
                 [void]$b.AppendLine('</table>')
@@ -1451,7 +1549,12 @@ foreach ($e in ($comProb | Select-Object -First 10)) {
 }
 if ($comProb.Count -gt 10) { Write-Host "  ... (+$($comProb.Count - 10) more in the log)" }
 if ($temPs) {
-    Write-Host (" PowerShell: $($psExec.Count) run(s), $($psLista.Count) .ps1 file(s) logged" + $(if ($psLista.Count -gt 0) { ' (full contents in the log)' } else { '' })) -ForegroundColor Cyan
+    Write-Host (" PowerShell: $($psExec.Count) run(s), $($psLista.Count - $psEmbLista.Count) .ps1 file(s) logged, $($psEmbLista.Count) script(s) run from memory" + $(if ($psLista.Count -gt 0) { ' (full contents in the log)' } else { '' })) -ForegroundColor Cyan
+}
+foreach ($pe in $psEmbLista) { if ($pe.Arquivo) { Write-Host (' Code run from memory saved as: ' + $pe.Arquivo) -ForegroundColor Cyan } }
+if ($psEstado.Elevou) {
+    Write-Host ' WARNING: the script restarted itself with administrator rights in another window, which Debug-CMD cannot follow.' -ForegroundColor Yellow
+    Write-Host ('          Run Debug-CMD as administrator (ELEVATE=1) to capture it. The temporary copy was kept: ' + $copia) -ForegroundColor Yellow
 }
 Write-Host " Log: $logPath"
 if ($htmlPath) { Write-Host " HTML: $htmlPath" }
@@ -1524,7 +1627,7 @@ try {
         try { & $env:ComSpec /d /c "taskkill /PID $($p.Id) /T /F >nul 2>&1" } catch { }
         Start-Sleep -Milliseconds 300
     }
-    if ($copia -and (Test-Path -LiteralPath $copia)) {
+    if ($copia -and (-not $psEstado.Elevou) -and (Test-Path -LiteralPath $copia)) {
         Remove-Item -LiteralPath $copia -Force -ErrorAction SilentlyContinue
     }
     Ps-Fim
