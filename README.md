@@ -2,7 +2,7 @@
 
 English | [Português](README.pt-PT.md)
 
-Drag a `.cmd` or `.bat` file onto `Debug-CMD_v1.3.0.cmd` and get a `.log` of everything the script did, plus a summary of what worked and what failed.
+Drag a `.cmd` or `.bat` file onto `Debug-CMD_v1.4.0.cmd` and get a `.log` of everything the script did, plus a summary of what worked and what failed.
 
 A single file, nothing to install: it uses the PowerShell that already ships with Windows 10/11.
 
@@ -11,6 +11,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 - **Easy-to-read HTML report:** besides the `.log`, you get a self-contained `.html` page (no internet needed) with a status badge, summary cards, expandable failed commands, a list of what worked, and a filterable full log. It follows your light/dark theme.
 - **PowerShell logged too:** if your script writes `.ps1` files or runs PowerShell, the log keeps the full contents of every `.ps1` it writes or runs (even temporary ones the script deletes right after), each PowerShell it starts (even when the command isn't echoed), decoded `-EncodedCommand` payloads, and the `.ps1` line where PowerShell reported an error.
 - **Single-file `.cmd` tools too:** many tools carry their PowerShell inside the `.cmd` and run it from memory (`Invoke-Expression`), so no `.ps1` ever exists on disk. Debug-CMD cuts that code out of the file exactly as PowerShell does, logs it with line numbers, and saves it next to the log as `<name>_debug_<date>.embedded1.ps1`, so PowerShell's `At line:N` numbers match that file.
+- **Files the script creates are collected:** many tools write their own log, report or settings while they run (`.log`, `.txt`, `.json`, `.csv`, `.xml`, `.ini`). Debug-CMD finds the ones created or changed during the run, in the script's folder and in folders the script mentions (such as `C:\Name` or `%SystemDrive%\Name`), and puts their contents in the report with lines that look like errors marked. Add more folders with `COLLECT_DIRS`.
 - **Scripts that ask for administrator rights:** with `ELEVATE=AUTO` (the default), Debug-CMD runs as administrator when the script contains `runas`, `fltmc`, `net session` and similar. Otherwise the script restarts itself in a new window that can't be followed.
 - **Safe test mode:** choose `T` at the start to only analyze the script. Nothing is executed. For single-file tools, the batch checks (`goto`, `call`, labels) stop at the `#PS-BEGIN` marker and only the risk rules run on the embedded PowerShell. It flags dangerous commands (delete, format, registry, shutdown, downloads...) in the script, in inline and encoded PowerShell, and in `.ps1` files it uses that are already on disk, plus broken `goto`/`call` targets.
 - **Line-by-line debugging:** runs a temporary copy of your script with `echo on`, so the log shows each command right before its output.
@@ -27,7 +28,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 
 ## Usage
 
-1. Download `Debug-CMD_v1.3.0.cmd`.
+1. Download `Debug-CMD_v1.4.0.cmd`.
 2. Drag your `.cmd` or `.bat` file onto it.
 3. When it finishes, the window stays open and the HTML report opens in your browser.
 
@@ -44,7 +45,7 @@ Set `MODE` to `RUN` or `TEST` to skip the question.
 
 ## Options
 
-These are at the top of `Debug-CMD_v1.3.0.cmd` (`1` = yes, `0` = no; `ELEVATE` and `MODE` take words):
+These are at the top of `Debug-CMD_v1.4.0.cmd` (`1` = yes, `0` = no; `ELEVATE` and `MODE` take words):
 
 | Option | Default | What it does |
 |---|---|---|
@@ -54,6 +55,8 @@ These are at the top of `Debug-CMD_v1.3.0.cmd` (`1` = yes, `0` = no; `ELEVATE` a
 | `OPEN_REPORT` | `1` | Opens the report when done (HTML in the browser, or the log in Notepad) |
 | `GENERATE_HTML` | `1` | Also creates the `.html` report next to the `.log` |
 | `LOG_PS1` | `1` | Also logs PowerShell: the `.ps1` files the script writes or runs (full contents), the PowerShell processes it starts, and decoded `-EncodedCommand` |
+| `COLLECT_FILES` | `1` | Also collects the text files the script creates or changes while it runs (its own logs, reports, settings) and shows them in the report |
+| `COLLECT_DIRS` | *(empty)* | Extra folders to look in, separated by semicolons (the script's folder and folders it mentions are automatic) |
 | `MODE` | `ASK` | `ASK` asks every time, `RUN` always executes, `TEST` only analyzes (executes nothing) |
 
 ## Example summary
