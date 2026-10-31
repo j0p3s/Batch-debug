@@ -2,7 +2,7 @@
 
 English | [Português](README.pt-PT.md)
 
-Drag a `.cmd` or `.bat` file onto `Debug-CMD_v1.4.1.cmd` and get a `.log` of everything the script did, plus a summary of what worked and what failed.
+Drag a `.cmd` or `.bat` file onto `Debug-CMD_v1.4.2.cmd` and get a `.log` of everything the script did, plus a summary of what worked and what failed.
 
 A single file, nothing to install: it uses the PowerShell that already ships with Windows 10/11.
 
@@ -28,7 +28,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 
 ## Usage
 
-1. Download `Debug-CMD_v1.4.1.cmd`.
+1. Download `Debug-CMD_v1.4.2.cmd`.
 2. Drag your `.cmd` or `.bat` file onto it.
 3. When it finishes, the window stays open and the HTML report opens in your browser.
 
@@ -45,7 +45,7 @@ Set `MODE` to `RUN` or `TEST` to skip the question.
 
 ## Options
 
-These are at the top of `Debug-CMD_v1.4.1.cmd` (`1` = yes, `0` = no; `ELEVATE` and `MODE` take words):
+These are at the top of `Debug-CMD_v1.4.2.cmd` (`1` = yes, `0` = no; `ELEVATE` and `MODE` take words):
 
 | Option | Default | What it does |
 |---|---|---|
