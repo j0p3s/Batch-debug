@@ -2,7 +2,7 @@
 
 English | [Português](README.pt-PT.md)
 
-Drag a `.cmd` or `.bat` file onto `Debug-CMD.cmd` and get a `.log` of everything the script did, plus a summary of what worked and what failed.
+Drag a `.cmd` or `.bat` file onto `Debug-CMD_v1.3.0.cmd` and get a `.log` of everything the script did, plus a summary of what worked and what failed.
 
 A single file, nothing to install: it uses the PowerShell that already ships with Windows 10/11.
 
@@ -12,7 +12,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 - **PowerShell logged too:** if your script writes `.ps1` files or runs PowerShell, the log keeps the full contents of every `.ps1` it writes or runs (even temporary ones the script deletes right after), each PowerShell it starts (even when the command isn't echoed), decoded `-EncodedCommand` payloads, and the `.ps1` line where PowerShell reported an error.
 - **Single-file `.cmd` tools too:** many tools carry their PowerShell inside the `.cmd` and run it from memory (`Invoke-Expression`), so no `.ps1` ever exists on disk. Debug-CMD cuts that code out of the file exactly as PowerShell does, logs it with line numbers, and saves it next to the log as `<name>_debug_<date>.embedded1.ps1`, so PowerShell's `At line:N` numbers match that file.
 - **Scripts that ask for administrator rights:** with `ELEVATE=AUTO` (the default), Debug-CMD runs as administrator when the script contains `runas`, `fltmc`, `net session` and similar. Otherwise the script restarts itself in a new window that can't be followed.
-- **Safe test mode:** choose `T` at the start to only analyze the script. Nothing is executed. It flags dangerous commands (delete, format, registry, shutdown, downloads...) in the script, in inline and encoded PowerShell, and in `.ps1` files it uses that are already on disk, plus broken `goto`/`call` targets.
+- **Safe test mode:** choose `T` at the start to only analyze the script. Nothing is executed. For single-file tools, the batch checks (`goto`, `call`, labels) stop at the `#PS-BEGIN` marker and only the risk rules run on the embedded PowerShell. It flags dangerous commands (delete, format, registry, shutdown, downloads...) in the script, in inline and encoded PowerShell, and in `.ps1` files it uses that are already on disk, plus broken `goto`/`call` targets.
 - **Line-by-line debugging:** runs a temporary copy of your script with `echo on`, so the log shows each command right before its output.
 - **Timestamped log:** every line carries a time with milliseconds. The top of the log lists the user, the Windows version, and whether it ran as administrator.
 - **Summary at the top of the log and on screen:**
@@ -27,7 +27,7 @@ A single file, nothing to install: it uses the PowerShell that already ships wit
 
 ## Usage
 
-1. Download `Debug-CMD.cmd`.
+1. Download `Debug-CMD_v1.3.0.cmd`.
 2. Drag your `.cmd` or `.bat` file onto it.
 3. When it finishes, the window stays open and the HTML report opens in your browser.
 
@@ -44,7 +44,7 @@ Set `MODE` to `RUN` or `TEST` to skip the question.
 
 ## Options
 
-These are at the top of `Debug-CMD.cmd` (`1` = yes, `0` = no; `ELEVATE` and `MODE` take words):
+These are at the top of `Debug-CMD_v1.3.0.cmd` (`1` = yes, `0` = no; `ELEVATE` and `MODE` take words):
 
 | Option | Default | What it does |
 |---|---|---|

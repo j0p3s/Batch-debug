@@ -1,0 +1,9 @@
+# Logs e cópias temporárias geradas pelo Debug-CMD
+*_debug_*.log
+__dbg_*
+Debug-CMD_*.ps1
+*_debug_*.ps1
+
+# Windows
+Thumbs.db
+Desktop.ini

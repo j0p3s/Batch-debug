@@ -2,7 +2,7 @@
 
 [English](README.md) | Português
 
-Arrasta um `.cmd` ou `.bat` para cima do `Debug-CMD.cmd` e obtém um `.log` com tudo o que o script fez, mais um resumo do que correu bem e do que falhou.
+Arrasta um `.cmd` ou `.bat` para cima do `Debug-CMD_v1.3.0.cmd` e obtém um `.log` com tudo o que o script fez, mais um resumo do que correu bem e do que falhou.
 
 Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 10/11.
 
@@ -12,7 +12,7 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 - **PowerShell também fica no log:** se o script escreve ficheiros `.ps1` ou corre PowerShell, o log guarda o conteúdo completo de cada `.ps1` que ele escreve ou corre (mesmo os temporários que o script apaga logo a seguir), cada PowerShell que ele arranca (mesmo quando o comando não aparece com o echo), o `-EncodedCommand` descodificado e a linha do `.ps1` onde o PowerShell deu erro.
 - **Ferramentas de um só `.cmd` também:** muitas ferramentas trazem o PowerShell dentro do `.cmd` e correm-no a partir da memória (`Invoke-Expression`), por isso nunca existe um `.ps1` no disco. O Debug-CMD recorta esse código do ficheiro tal como o PowerShell faz, regista-o com números de linha e guarda-o ao lado do log como `<nome>_debug_<data>.embedded1.ps1`, para os `At line:N` do PowerShell coincidirem com esse ficheiro.
 - **Scripts que pedem administrador:** com `ELEVATE=AUTO` (o valor por defeito), o Debug-CMD corre como administrador quando o script contém `runas`, `fltmc`, `net session` e semelhantes. Se não o fizer, o script reinicia-se numa janela nova que não se consegue seguir.
-- **Modo de teste seguro:** escolhe `T` no início para só analisar o script. Nada é executado. Assinala comandos perigosos (apagar, formatar, registo, desligar, downloads...) no script, no PowerShell embutido ou codificado e nos `.ps1` que ele usa e que já existem no disco, além de destinos de `goto`/`call` inexistentes.
+- **Modo de teste seguro:** escolhe `T` no início para só analisar o script. Nada é executado. Assinala comandos perigosos (apagar, formatar, registo, desligar, downloads...) no script, no PowerShell embutido ou codificado e nos `.ps1` que ele usa e que já existem no disco, além de destinos de `goto`/`call` inexistentes. Nas ferramentas de um só ficheiro, as verificações de batch (`goto`, `call`, etiquetas) param no marcador `#PS-BEGIN` e só as regras de risco são aplicadas ao PowerShell embutido.
 - **Debug linha a linha:** executa uma cópia temporária do script com `echo on`, por isso o log mostra cada comando antes da respetiva saída.
 - **Log com hora:** cada linha tem hora com milissegundos. O topo do log traz o utilizador, a versão do Windows e se correu como administrador.
 - **Resumo no topo do log e no ecrã:**
@@ -27,7 +27,7 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 
 ## Utilização
 
-1. Descarrega o `Debug-CMD.cmd`.
+1. Descarrega o `Debug-CMD_v1.3.0.cmd`.
 2. Arrasta o teu `.cmd` ou `.bat` para cima dele.
 3. No fim, a janela fica aberta e o relatório HTML abre no browser.
 
@@ -44,7 +44,7 @@ Põe `MODE` a `RUN` ou `TEST` para não perguntar.
 
 ## Opções
 
-Estão no topo do `Debug-CMD.cmd` (`1` = sim, `0` = não; `ELEVATE` e `MODE` usam palavras):
+Estão no topo do `Debug-CMD_v1.3.0.cmd` (`1` = sim, `0` = não; `ELEVATE` e `MODE` usam palavras):
 
 | Opção | Por defeito | O que faz |
 |---|---|---|
