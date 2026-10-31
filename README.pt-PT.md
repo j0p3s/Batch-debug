@@ -2,7 +2,7 @@
 
 [English](README.md) | Português
 
-Arrasta um `.cmd` ou `.bat` para cima do `Debug-CMD_v1.4.0.cmd` e obtém um `.log` com tudo o que o script fez, mais um resumo do que correu bem e do que falhou.
+Arrasta um `.cmd` ou `.bat` para cima do `Debug-CMD_v1.4.1.cmd` e obtém um `.log` com tudo o que o script fez, mais um resumo do que correu bem e do que falhou.
 
 Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 10/11.
 
@@ -28,7 +28,7 @@ Um único ficheiro, sem instalar nada: usa o PowerShell que já vem no Windows 1
 
 ## Utilização
 
-1. Descarrega o `Debug-CMD_v1.4.0.cmd`.
+1. Descarrega o `Debug-CMD_v1.4.1.cmd`.
 2. Arrasta o teu `.cmd` ou `.bat` para cima dele.
 3. No fim, a janela fica aberta e o relatório HTML abre no browser.
 
@@ -45,7 +45,7 @@ Põe `MODE` a `RUN` ou `TEST` para não perguntar.
 
 ## Opções
 
-Estão no topo do `Debug-CMD_v1.4.0.cmd` (`1` = sim, `0` = não; `ELEVATE` e `MODE` usam palavras):
+Estão no topo do `Debug-CMD_v1.4.1.cmd` (`1` = sim, `0` = não; `ELEVATE` e `MODE` usam palavras):
 
 | Opção | Por defeito | O que faz |
 |---|---|---|
